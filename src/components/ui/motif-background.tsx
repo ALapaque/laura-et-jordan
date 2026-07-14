@@ -11,18 +11,23 @@ import { clsx } from 'clsx';
  *   Le fichier réel dépasse la limite d'import de l'outil design (256 Ko), il
  *   ne peut donc pas être récupéré automatiquement.
  */
-const ENV_MOTIF_SRC = process.env.NEXT_PUBLIC_MOTIF_SRC || undefined;
+// Le motif réel (toile de Jouy fournie par le couple) est commité dans /public.
+// Surchargable via NEXT_PUBLIC_MOTIF_SRC.
+const DEFAULT_MOTIF_SRC = process.env.NEXT_PUBLIC_MOTIF_SRC || '/motif.jpg';
 
 export function MotifBackground({
   className,
   style,
   patternId = 'jl-jouy',
-  imageSrc = ENV_MOTIF_SRC,
+  imageSrc = DEFAULT_MOTIF_SRC,
+  size = '600px',
 }: {
   className?: string;
   style?: React.CSSProperties;
   patternId?: string;
   imageSrc?: string;
+  /** Taille de la tuile répétée (background-size). */
+  size?: string;
 }) {
   if (imageSrc) {
     return (
@@ -32,9 +37,9 @@ export function MotifBackground({
         style={{
           mixBlendMode: 'multiply',
           backgroundImage: `url(${imageSrc})`,
-          backgroundSize: '560px',
+          backgroundSize: size,
           backgroundRepeat: 'repeat',
-          filter: 'saturate(1.08) contrast(1.03)',
+          filter: 'saturate(1.06) contrast(1.02)',
           ...style,
         }}
       />

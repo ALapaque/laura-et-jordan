@@ -9,7 +9,7 @@ import { DEFAULT_RSVP_FIELDS, type Moment, type Parcours, type RsvpResponse, typ
 export const demoWedding: Wedding = {
   id: 'demo-wedding',
   coupleNames: 'Laura & Jordan',
-  eventDate: null, // « [ Date à confirmer ] »
+  eventDate: '2027-07-31T14:00:00.000Z', // 31 juillet 2027 (charte / faire-part)
   venue: null,
   musicUrl: null,
   welcomeText: "C'est entourés de ceux qui comptent que nous voulons dire oui.",
