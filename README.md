@@ -164,6 +164,16 @@ npm run format      # prettier --write
 
 ## 📝 À fournir plus tard (n'empêche pas le build)
 
-Date & lieu définitifs, horaires des moments, photos + petite(s) boucle(s) vidéo, le motif toile de
-Jouy recoloré final (`/public/motif.png` → `<MotifBackground imageSrc="/motif.png" />`), la police
-finale, les emails de notification réels, le domaine.
+Date & lieu définitifs, horaires des moments, photos + petite(s) boucle(s) vidéo, la police finale,
+les emails de notification réels, le domaine.
+
+**Assets design exacts (motif & vidéo d'enveloppe)** : le motif toile de Jouy et la vidéo
+d'ouverture d'enveloppe du projet Claude Design dépassent la limite d'import de l'outil (256 Ko)
+et ne peuvent pas être récupérés automatiquement. En attendant, le site rend un motif SVG fidèle
+et une ouverture d'enveloppe animée. Pour coller **exactement** au design, déposez les fichiers
+dans `/public` et renseignez :
+
+```bash
+NEXT_PUBLIC_MOTIF_SRC=/motif.png         # remplace le motif SVG par la vraie image
+NEXT_PUBLIC_ENVELOPE_VIDEO=/envelope.webm # remplace l'animation par la vraie vidéo
+```
