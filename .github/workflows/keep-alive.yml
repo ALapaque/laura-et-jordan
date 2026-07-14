@@ -1,0 +1,36 @@
+name: Keep Supabase alive
+
+# Les projets Supabase gratuits se mettent en pause après 7 jours d'inactivité.
+# Ce workflow ping l'API REST toutes les ~3 jours pour éviter la mise en pause.
+#
+# Secrets requis (Settings → Secrets and variables → Actions) :
+#   SUPABASE_URL       = https://xxxx.supabase.co
+#   SUPABASE_ANON_KEY  = clé anon (publique)
+
+on:
+  schedule:
+    - cron: '0 6 */3 * *' # toutes les 3 jours à 06:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "⚠️  Secrets SUPABASE_URL / SUPABASE_ANON_KEY manquants — rien à pinger."
+            exit 0
+          fi
+          code=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/rest/v1/")
+          echo "Réponse Supabase : HTTP $code"
+          if [ "$code" -ge 500 ]; then
+            echo "❌ Supabase indisponible"
+            exit 1
+          fi
+          echo "✅ Supabase actif"
