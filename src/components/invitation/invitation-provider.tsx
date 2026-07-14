@@ -188,6 +188,7 @@ export function InvitationProvider({
           onOpen={openEnvelope}
           onDone={onIntroDone}
           onSkip={skipIntro}
+          videoSrc={process.env.NEXT_PUBLIC_ENVELOPE_VIDEO || undefined}
         />
       )}
 

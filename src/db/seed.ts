@@ -31,6 +31,7 @@ async function main() {
     .insert(wedding)
     .values({
       coupleNames: demoWedding.coupleNames,
+      eventDate: demoWedding.eventDate ? new Date(demoWedding.eventDate) : null,
       welcomeText: demoWedding.welcomeText,
       locales: demoWedding.locales,
       notifyEmails: demoWedding.notifyEmails,
