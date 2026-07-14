@@ -41,8 +41,9 @@ Dans **Settings → Database → Connection string** :
 - Remplace `[YOUR-PASSWORD]` par le mot de passe de l'étape 1.
 
 ```
-DATABASE_URL=postgresql://postgres.xxxx:MON_MDP@aws-0-eu-west-3.pooler.supabase.com:6543/postgres
+DATABASE_URL="postgresql://postgres.[REF-PROJET]:[MOT-DE-PASSE]@aws-0-[REGION].pooler.supabase.com:6543/postgres"
 ```
+(remplace les `[...]` par tes valeurs — surtout ne commit jamais ce fichier rempli.)
 
 ## 3. Créer les tables (migrations + seed)
 
