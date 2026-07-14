@@ -1,0 +1,153 @@
+@import 'tailwindcss';
+
+/* ─────────────────────────────────────────────────────────────
+   Design tokens — « Éditorial clair · Citron & Olivier »
+   Palette stricte (voir CLAUDE.md du projet design)
+   ───────────────────────────────────────────────────────────── */
+@theme {
+  --color-bg: #f2ede0; /* fond crème chaud */
+  --color-surface: #fbf8f0; /* cartes */
+  --color-panel: #f8f3e8; /* panneaux élevés */
+  --color-ink: #40392a; /* texte principal */
+  --color-muted: #78745a; /* texte tertiaire */
+  --color-olive: #5c6441; /* feuillage, boutons, liens */
+  --color-sage: #858052; /* accents doux, légendes */
+  --color-accent: #efd370; /* jaune */
+  --color-accent-soft: #ecde9a; /* jaune pastel */
+  --color-gold: #d2ae47; /* or — accent principal (« & ») */
+  --color-line: rgba(92, 100, 65, 0.18);
+
+  --font-display: var(--font-alex-brush), 'Brush Script MT', cursive;
+  --font-accent: var(--font-kaushan), cursive;
+  --font-body: var(--font-eb-garamond), Georgia, 'Times New Roman', serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, 'SFMono-Regular', monospace;
+}
+
+/* ── Base ─────────────────────────────────────────────────── */
+* {
+  box-sizing: border-box;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+a {
+  color: var(--color-olive);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--color-ink);
+}
+::selection {
+  background: var(--color-accent);
+  color: var(--color-ink);
+}
+:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+/* ── Keyframes (reprises du prototype design) ─────────────── */
+@keyframes jlBreathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+@keyframes jlFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.65;
+  }
+  50% {
+    transform: translateY(7px);
+    opacity: 1;
+  }
+}
+@keyframes jlFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes jlFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes jlShimmer {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.12);
+  }
+}
+
+/* ── Scroll reveal (progressive enhancement) ──────────────── */
+[data-rev] {
+  transition:
+    opacity 0.9s ease,
+    transform 0.9s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+[data-rev='hidden'] {
+  opacity: 0;
+  transform: translateY(30px);
+}
+[data-rev='shown'] {
+  opacity: 1;
+  transform: none;
+}
+
+/* Utilities */
+.font-display {
+  font-family: var(--font-display);
+}
+.font-accent {
+  font-family: var(--font-accent);
+}
+.font-mono {
+  font-family: var(--font-mono);
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Respect des préférences de mouvement réduit */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  [data-rev] {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

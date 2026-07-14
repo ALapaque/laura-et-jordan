@@ -1,0 +1,12 @@
+# Exécution locale de l'image de production.
+# Supabase reste hébergé chez Supabase — seule l'app Next.js tourne ici.
+# En production, Coolify construit directement le Dockerfile (voir README).
+
+services:
+  web:
+    build: .
+    ports:
+      - '3000:3000'
+    env_file:
+      - .env.local
+    restart: unless-stopped
