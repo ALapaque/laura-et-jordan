@@ -1,15 +1,6 @@
 import 'server-only';
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
-import { db } from '@/db';
-import { detailCard, media, moment, momentMedia, parcours, rsvpResponse, wedding } from '@/db/schema';
+import { createServiceClient } from '@/lib/supabase/server';
 import { demoDetailCards, demoStore, nextDemoId } from '@/db/demo-data';
-import type {
-  DetailCardRow,
-  MomentRow,
-  ParcoursRow,
-  RsvpResponseRow,
-  WeddingRow,
-} from '@/db/schema';
 import { generateToken } from './tokens';
 import {
   DEFAULT_RSVP_FIELDS,
@@ -24,16 +15,108 @@ import {
   type Wedding,
 } from './types';
 
-/** True quand l'app tourne sur des données en mémoire (pas de Postgres). */
-export const isDemoMode = db === null;
+/**
+ * Accès aux données via l'API HTTP de Supabase (PostgREST), avec la clé
+ * service-role — SERVEUR UNIQUEMENT (contourne RLS, comme le rôle `postgres`
+ * de Drizzle auparavant ; la clé n'est jamais envoyée au navigateur).
+ *
+ * Pourquoi HTTP et plus de connexion Postgres TCP : en serverless (Vercel),
+ * l'instance est « gelée » entre deux requêtes et le socket TCP vers Supabase
+ * meurt → la requête suivante restait pendue (504 / timeout 300 s). Les appels
+ * HTTP sont **sans état** : rien à maintenir, rien qui périme → cette classe
+ * d'erreurs disparaît. `null` quand Supabase n'est pas configuré → mode démo
+ * (données en mémoire), exactement comme avant.
+ */
+const supa = createServiceClient();
+
+/** True quand l'app tourne sur des données en mémoire (pas de Supabase). */
+export const isDemoMode = supa === null;
+
+// ── Helpers PostgREST ────────────────────────────────────────────
+/** Lève si la réponse porte une erreur, sinon renvoie les données. */
+function ok<T>(res: { data: T | null; error: { message: string } | null }): T {
+  if (res.error) throw new Error(res.error.message);
+  return res.data as T;
+}
+/** Idem pour les écritures sans `returning` (update / delete). */
+function done(res: { error: { message: string } | null }): void {
+  if (res.error) throw new Error(res.error.message);
+}
+/**
+ * Une relation embarquée (`media(url)`) est renvoyée par PostgREST en objet
+ * unique pour un lien many-to-one, mais supabase-js la type parfois en tableau.
+ * On normalise en prenant le premier élément si c'en est un.
+ */
+function firstOf<T>(v: T | T[] | null | undefined): T | null {
+  if (Array.isArray(v)) return v[0] ?? null;
+  return v ?? null;
+}
+
+// Colonnes sélectionnées (alias snake_case → camelCase attendu par les vues).
+const WEDDING_COLS =
+  'id, coupleNames:couple_names, eventDate:event_date, venue, welcomeText:welcome_text, rsvpDeadline:rsvp_deadline, locales, notifyEmails:notify_emails, notifyEnabled:notify_enabled, siteDomain:site_domain, coverMediaId:cover_media_id, heroVideoId:hero_video_id';
+const MOMENT_COLS =
+  'id, title, startsAt:starts_at, location, description, dressCode:dress_code, mapLat:map_lat, mapLng:map_lng, sortOrder:sort_order, mediaId:media_id';
+const PARCOURS_COLS =
+  'id, token, name, visibleMomentIds:visible_moment_ids, rsvpFields:rsvp_fields, introOverride:intro_override, createdAt:created_at';
+const RSVP_COLS =
+  'id, parcoursId:parcours_id, guestName:guest_name, attending, headcount, perMoment:per_moment, dietary, message, locale, createdAt:created_at';
+const DETAIL_COLS_BASE = 'id, label, value, sortOrder:sort_order';
+
+type WeddingSel = {
+  id: string;
+  coupleNames: string;
+  eventDate: string | null;
+  venue: string | null;
+  welcomeText: string;
+  rsvpDeadline: string | null;
+  locales: string[];
+  notifyEmails: string[];
+  notifyEnabled: boolean;
+  siteDomain: string | null;
+  coverMediaId: string | null;
+  heroVideoId: string | null;
+};
+type MomentSel = {
+  id: string;
+  title: string;
+  startsAt: string | null;
+  location: string | null;
+  description: string;
+  dressCode: string | null;
+  mapLat: number | null;
+  mapLng: number | null;
+  sortOrder: number;
+  mediaId: string | null;
+};
+type ParcoursSel = {
+  id: string;
+  token: string;
+  name: string;
+  visibleMomentIds: string[];
+  rsvpFields: RsvpFields | null;
+  introOverride: string | null;
+  createdAt: string;
+};
+type RsvpSel = {
+  id: string;
+  parcoursId: string;
+  guestName: string;
+  attending: Attending;
+  headcount: number;
+  perMoment: Record<string, boolean>;
+  dietary: string | null;
+  message: string | null;
+  locale: string;
+  createdAt: string;
+};
 
 // ── Mappers rows → vues ──────────────────────────────────────────
 /**
- * Convertit une valeur date (Date, string, number…) en ISO 8601, ou `null`.
- * Le driver Postgres peut renvoyer un `Date` invalide (NaN) selon la valeur
- * stockée ; un `?` sur la vérité ne l'attrape pas (un `Date` invalide reste
- * truthy) et `.toISOString()` lève alors `RangeError: Invalid time value`.
- * On teste donc explicitement `getTime()` avant de sérialiser.
+ * Convertit une valeur date (string ISO, Date…) en ISO 8601, ou `null`.
+ * PostgREST renvoie déjà des chaînes ISO, mais on garde ce garde-fou : une
+ * valeur invalide (NaN) reste truthy et `.toISOString()` lèverait alors
+ * `RangeError: Invalid time value`.
  */
 function toIso(value: unknown): string | null {
   if (value == null) return null;
@@ -41,7 +124,7 @@ function toIso(value: unknown): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-function toWedding(row: WeddingRow, coverUrl: string | null, heroVideoUrl: string | null): Wedding {
+function toWedding(row: WeddingSel, coverUrl: string | null, heroVideoUrl: string | null): Wedding {
   return {
     id: row.id,
     coupleNames: row.coupleNames,
@@ -58,7 +141,7 @@ function toWedding(row: WeddingRow, coverUrl: string | null, heroVideoUrl: strin
   };
 }
 
-function toMoment(row: MomentRow, media: MomentAsset[]): Moment {
+function toMoment(row: MomentSel, media: MomentAsset[]): Moment {
   return {
     id: row.id,
     title: row.title,
@@ -73,7 +156,7 @@ function toMoment(row: MomentRow, media: MomentAsset[]): Moment {
   };
 }
 
-function toParcours(row: ParcoursRow): Parcours {
+function toParcours(row: ParcoursSel): Parcours {
   return {
     id: row.id,
     token: row.token,
@@ -85,7 +168,7 @@ function toParcours(row: ParcoursRow): Parcours {
   };
 }
 
-function toResponse(row: RsvpResponseRow, parcoursName: string, email: string | null): RsvpResponse {
+function toResponse(row: RsvpSel, parcoursName: string, email: string | null): RsvpResponse {
   return {
     id: row.id,
     parcoursId: row.parcoursId,
@@ -103,15 +186,16 @@ function toResponse(row: RsvpResponseRow, parcoursName: string, email: string | 
 }
 
 async function resolveMediaUrl(id: string | null): Promise<string | null> {
-  if (!id || !db) return null;
-  const [row] = await db.select({ url: media.url }).from(media).where(eq(media.id, id)).limit(1);
-  return row?.url ?? null;
+  if (!id || !supa) return null;
+  const { data } = await supa.from('media').select('url').eq('id', id).maybeSingle();
+  return (data as { url: string | null } | null)?.url ?? null;
 }
 
 // ── Lectures ─────────────────────────────────────────────────────
 export async function getWedding(): Promise<Wedding> {
-  if (!db) return { ...demoStore().wedding };
-  const [row] = await db.select().from(wedding).limit(1);
+  if (!supa) return { ...demoStore().wedding };
+  const rows = ok<WeddingSel[]>(await supa.from('wedding').select(WEDDING_COLS).limit(1));
+  const row = rows[0];
   if (!row) return { ...demoStore().wedding };
   const [coverUrl, heroVideoUrl] = await Promise.all([
     resolveMediaUrl(row.coverMediaId),
@@ -121,53 +205,54 @@ export async function getWedding(): Promise<Wedding> {
 }
 
 export async function getMoments(): Promise<Moment[]> {
-  if (!db) {
+  if (!supa) {
     return demoStore()
       .moments.map((m) => ({ ...m, media: m.media.map((a) => ({ ...a })) }))
       .sort(bySortOrder);
   }
-  const rows = await db
-    .select({ moment, coverUrl: media.url })
-    .from(moment)
-    .leftJoin(media, eq(moment.mediaId, media.id))
-    .orderBy(asc(moment.sortOrder));
+  const rows = ok<MomentSel[]>(
+    await supa.from('moment').select(MOMENT_COLS).order('sort_order', { ascending: true }),
+  );
 
   // Galeries multi-photos (table `moment_media`). Résilient : si la table n'existe
   // pas encore (script SQL non lancé), on retombe sur la photo unique historique
   // (`moment.media_id`) pour ne rien perdre à l'affichage.
-  const galleries = new Map<string, MomentAsset[]>();
   try {
-    const assets = await db
-      .select({
-        id: momentMedia.id,
-        momentId: momentMedia.momentId,
-        url: media.url,
-        sortOrder: momentMedia.sortOrder,
-      })
-      .from(momentMedia)
-      .innerJoin(media, eq(momentMedia.mediaId, media.id))
-      .orderBy(asc(momentMedia.sortOrder));
+    type Emb = { url: string | null };
+    const res = await supa
+      .from('moment_media')
+      .select('id, momentId:moment_id, sortOrder:sort_order, media(url)')
+      .order('sort_order', { ascending: true });
+    if (res.error) throw new Error(res.error.message);
+    const assets = (res.data ?? []) as unknown as Array<{
+      id: string;
+      momentId: string;
+      sortOrder: number;
+      media: Emb | Emb[] | null;
+    }>;
+    const galleries = new Map<string, MomentAsset[]>();
     for (const a of assets) {
-      if (!a.url) continue;
+      const url = firstOf(a.media)?.url;
+      if (!url) continue;
       const list = galleries.get(a.momentId) ?? [];
-      list.push({ id: a.id, url: a.url, sortOrder: a.sortOrder });
+      list.push({ id: a.id, url, sortOrder: a.sortOrder });
       galleries.set(a.momentId, list);
     }
-    return rows.map((r) => toMoment(r.moment, galleries.get(r.moment.id) ?? []));
+    return rows.map((r) => toMoment(r, galleries.get(r.id) ?? []));
   } catch {
     // Table `moment_media` absente → repli sur la photo unique existante.
-    return rows.map((r) =>
-      toMoment(
-        r.moment,
-        r.coverUrl ? [{ id: `${r.moment.id}-cover`, url: r.coverUrl, sortOrder: 0 }] : [],
-      ),
+    const covers = await Promise.all(rows.map((r) => resolveMediaUrl(r.mediaId)));
+    return rows.map((r, i) =>
+      toMoment(r, covers[i] ? [{ id: `${r.id}-cover`, url: covers[i]!, sortOrder: 0 }] : []),
     );
   }
 }
 
 export async function getParcoursList(): Promise<Parcours[]> {
-  if (!db) return demoStore().parcours.map((p) => ({ ...p }));
-  const rows = await db.select().from(parcours).orderBy(asc(parcours.createdAt));
+  if (!supa) return demoStore().parcours.map((p) => ({ ...p }));
+  const rows = ok<ParcoursSel[]>(
+    await supa.from('parcours').select(PARCOURS_COLS).order('created_at', { ascending: true }),
+  );
   return rows.map(toParcours);
 }
 
@@ -194,12 +279,14 @@ export async function getInvitationByToken(token: string): Promise<Invitation | 
 }
 
 export async function getResponses(): Promise<RsvpResponse[]> {
-  if (!db) {
+  if (!supa) {
     return [...demoStore().responses].sort(byRecent);
   }
   const parcoursList = await getParcoursList();
   const nameById = new Map(parcoursList.map((p) => [p.id, p.name]));
-  const rows = await db.select().from(rsvpResponse).orderBy(desc(rsvpResponse.createdAt));
+  const rows = ok<RsvpSel[]>(
+    await supa.from('rsvp_response').select(RSVP_COLS).order('created_at', { ascending: false }),
+  );
   const emailById = await loadEmailMap();
   return rows.map((r) =>
     toResponse(r, nameById.get(r.parcoursId) ?? '—', emailById.get(r.id) ?? null),
@@ -209,18 +296,15 @@ export async function getResponses(): Promise<RsvpResponse[]> {
 /**
  * L'email est une colonne *additive* (`rsvp_response.email`, script 05).
  * Pour ne JAMAIS casser les lectures si le script n'est pas encore lancé, on
- * la lit hors du `select()` Drizzle principal, en SQL brut tolérant aux erreurs.
+ * la lit à part, en tolérant l'erreur « colonne inexistante ».
  */
 async function loadEmailMap(): Promise<Map<string, string | null>> {
   const map = new Map<string, string | null>();
-  if (!db) return map;
-  try {
-    const rows = (await db.execute(
-      sql`select id, email from rsvp_response`,
-    )) as unknown as Array<{ id: string; email: string | null }>;
-    for (const r of rows) map.set(r.id, r.email ?? null);
-  } catch {
-    // Colonne `email` absente (script 05 non exécuté) → aucun email.
+  if (!supa) return map;
+  const { data, error } = await supa.from('rsvp_response').select('id, email');
+  if (error) return map; // colonne `email` absente → aucun email
+  for (const r of (data ?? []) as Array<{ id: string; email: string | null }>) {
+    map.set(r.id, r.email ?? null);
   }
   return map;
 }
@@ -265,7 +349,7 @@ export async function createParcours(input: {
   introOverride?: string | null;
 }): Promise<Parcours> {
   const token = generateToken(10);
-  if (!db) {
+  if (!supa) {
     const store = demoStore();
     const p: Parcours = {
       id: nextDemoId('p'),
@@ -279,30 +363,33 @@ export async function createParcours(input: {
     store.parcours.push(p);
     return p;
   }
-  const [w] = await db.select({ id: wedding.id }).from(wedding).limit(1);
+  const w = ok<Array<{ id: string }>>(await supa.from('wedding').select('id').limit(1))[0];
   if (!w) throw new Error('Aucun mariage configuré');
-  const [row] = await db
-    .insert(parcours)
-    .values({
-      weddingId: w.id,
-      token,
-      name: input.name,
-      visibleMomentIds: input.visibleMomentIds,
-      rsvpFields: input.rsvpFields ?? { ...DEFAULT_RSVP_FIELDS },
-      introOverride: input.introOverride ?? null,
-    })
-    .returning();
-  return toParcours(row!);
+  const row = ok<ParcoursSel>(
+    await supa
+      .from('parcours')
+      .insert({
+        wedding_id: w.id,
+        token,
+        name: input.name,
+        visible_moment_ids: input.visibleMomentIds,
+        rsvp_fields: input.rsvpFields ?? { ...DEFAULT_RSVP_FIELDS },
+        intro_override: input.introOverride ?? null,
+      })
+      .select(PARCOURS_COLS)
+      .single(),
+  );
+  return toParcours(row);
 }
 
 export async function deleteParcours(id: string): Promise<void> {
-  if (!db) {
+  if (!supa) {
     const store = demoStore();
     store.parcours = store.parcours.filter((p) => p.id !== id);
     store.responses = store.responses.filter((r) => r.parcoursId !== id);
     return;
   }
-  await db.delete(parcours).where(eq(parcours.id, id));
+  done(await supa.from('parcours').delete().eq('id', id));
 }
 
 // ── Mutations : RSVP (upsert par parcours + email, repli sur le nom) ──
@@ -328,7 +415,7 @@ export async function saveRsvp(
   const email = input.email?.trim() || null;
   const emailLc = email?.toLowerCase();
 
-  if (!db) {
+  if (!supa) {
     const store = demoStore();
     const existing = store.responses.find(
       (r) =>
@@ -357,61 +444,68 @@ export async function saveRsvp(
   }
 
   // Réponse existante : par email d'abord (identifiant fiable), sinon par nom.
+  // On récupère les réponses du parcours et on matche côté JS (insensible à la
+  // casse), en tolérant l'absence de la colonne `email` (script 05 non lancé).
   let existingId: string | null = null;
-  if (email) {
-    try {
-      const found = (await db.execute(
-        sql`select id from rsvp_response where parcours_id = ${input.parcoursId} and lower(email) = lower(${email}) order by created_at desc limit 1`,
-      )) as unknown as Array<{ id: string }>;
-      if (found[0]) existingId = found[0].id;
-    } catch {
-      // Colonne `email` absente → repli sur le nom.
-    }
+  const withEmail = await supa
+    .from('rsvp_response')
+    .select('id, guestName:guest_name, email')
+    .eq('parcours_id', input.parcoursId)
+    .order('created_at', { ascending: false });
+  let matchRows: Array<{ id: string; guestName: string; email: string | null }>;
+  if (withEmail.error) {
+    const noEmail = ok<Array<{ id: string; guestName: string }>>(
+      await supa
+        .from('rsvp_response')
+        .select('id, guestName:guest_name')
+        .eq('parcours_id', input.parcoursId)
+        .order('created_at', { ascending: false }),
+    );
+    matchRows = noEmail.map((r) => ({ ...r, email: null }));
+  } else {
+    matchRows = (withEmail.data ?? []) as Array<{ id: string; guestName: string; email: string | null }>;
+  }
+  if (emailLc) {
+    existingId = matchRows.find((r) => r.email?.trim().toLowerCase() === emailLc)?.id ?? null;
   }
   if (!existingId) {
-    const existing = await db
-      .select({ id: rsvpResponse.id })
-      .from(rsvpResponse)
-      .where(
-        and(
-          eq(rsvpResponse.parcoursId, input.parcoursId),
-          sql`lower(${rsvpResponse.guestName}) = lower(${input.guestName})`,
-        ),
-      )
-      .limit(1);
-    if (existing[0]) existingId = existing[0].id;
+    const nameLc = input.guestName.trim().toLowerCase();
+    existingId = matchRows.find((r) => r.guestName.trim().toLowerCase() === nameLc)?.id ?? null;
   }
 
   const values = {
-    parcoursId: input.parcoursId,
-    guestName: input.guestName,
+    parcours_id: input.parcoursId,
+    guest_name: input.guestName,
     attending: input.attending,
     headcount: input.headcount,
-    perMoment: input.perMoment,
+    per_moment: input.perMoment,
     dietary: input.dietary,
     message: input.message,
     locale: input.locale,
-    ipHash: input.ipHash,
+    ip_hash: input.ipHash,
   };
 
-  let row: RsvpResponseRow;
+  let row: RsvpSel;
   if (existingId) {
-    const [updated] = await db
-      .update(rsvpResponse)
-      .set({ ...values, createdAt: new Date() })
-      .where(eq(rsvpResponse.id, existingId))
-      .returning();
-    row = updated!;
+    // `created_at` remis à maintenant → « récent » reflète la dernière modification.
+    row = ok<RsvpSel>(
+      await supa
+        .from('rsvp_response')
+        .update({ ...values, created_at: new Date().toISOString() })
+        .eq('id', existingId)
+        .select(RSVP_COLS)
+        .single(),
+    );
   } else {
-    const [inserted] = await db.insert(rsvpResponse).values(values).returning();
-    row = inserted!;
+    row = ok<RsvpSel>(await supa.from('rsvp_response').insert(values).select(RSVP_COLS).single());
   }
-  // Email : colonne additive, écrite en SQL brut tolérant (voir loadEmailMap).
+  // Email : colonne additive, écrite en best-effort (ignorée si absente — le
+  // reste de la réponse est déjà enregistré).
   if (email) {
     try {
-      await db.execute(sql`update rsvp_response set email = ${email} where id = ${row.id}`);
+      await supa.from('rsvp_response').update({ email }).eq('id', row.id);
     } catch {
-      // Colonne `email` absente → ignoré (le reste de la réponse est bien enregistré).
+      // ignoré
     }
   }
   return { response: toResponse(row, p.name, email), parcours: p };
@@ -427,7 +521,7 @@ export async function getGuestResponse(
 ): Promise<RsvpPrefill | null> {
   const emailLc = email.trim().toLowerCase();
   if (!emailLc) return null;
-  if (!db) {
+  if (!supa) {
     const r = demoStore().responses.find(
       (x) => x.parcoursId === parcoursId && x.email?.trim().toLowerCase() === emailLc,
     );
@@ -442,35 +536,32 @@ export async function getGuestResponse(
       message: r.message ?? '',
     };
   }
-  try {
-    const rows = (await db.execute(
-      sql`select guest_name, email, attending, headcount, per_moment, dietary, message
-          from rsvp_response
-          where parcours_id = ${parcoursId} and lower(email) = lower(${email})
-          order by created_at desc limit 1`,
-    )) as unknown as Array<{
-      guest_name: string;
-      email: string | null;
-      attending: Attending;
-      headcount: number;
-      per_moment: Record<string, boolean> | null;
-      dietary: string | null;
-      message: string | null;
-    }>;
-    const r = rows[0];
-    if (!r) return null;
-    return {
-      guestName: r.guest_name,
-      email: r.email ?? '',
-      attending: r.attending,
-      headcount: r.headcount,
-      perMoment: r.per_moment ?? {},
-      dietary: r.dietary ?? '',
-      message: r.message ?? '',
-    };
-  } catch {
-    return null;
-  }
+  const { data, error } = await supa
+    .from('rsvp_response')
+    .select('guestName:guest_name, email, attending, headcount, perMoment:per_moment, dietary, message')
+    .eq('parcours_id', parcoursId)
+    .order('created_at', { ascending: false });
+  if (error) return null; // colonne `email` absente ou autre → pas de pré-remplissage
+  const rows = (data ?? []) as Array<{
+    guestName: string;
+    email: string | null;
+    attending: Attending;
+    headcount: number;
+    perMoment: Record<string, boolean> | null;
+    dietary: string | null;
+    message: string | null;
+  }>;
+  const r = rows.find((x) => x.email?.trim().toLowerCase() === emailLc);
+  if (!r) return null;
+  return {
+    guestName: r.guestName,
+    email: r.email ?? '',
+    attending: r.attending,
+    headcount: r.headcount,
+    perMoment: r.perMoment ?? {},
+    dietary: r.dietary ?? '',
+    message: r.message ?? '',
+  };
 }
 
 /** Édition d'une réponse RSVP par le couple (dashboard). */
@@ -485,7 +576,7 @@ export async function updateResponse(
     message?: string | null;
   },
 ): Promise<void> {
-  if (!db) {
+  if (!supa) {
     const r = demoStore().responses.find((x) => x.id === id);
     if (r) {
       if (patch.guestName !== undefined) r.guestName = patch.guestName;
@@ -497,26 +588,24 @@ export async function updateResponse(
     }
     return;
   }
-  await db
-    .update(rsvpResponse)
-    .set({
-      ...(patch.guestName !== undefined && { guestName: patch.guestName }),
-      ...(patch.attending !== undefined && { attending: patch.attending }),
-      ...(patch.headcount !== undefined && { headcount: patch.headcount }),
-      ...(patch.perMoment !== undefined && { perMoment: patch.perMoment }),
-      ...(patch.dietary !== undefined && { dietary: patch.dietary }),
-      ...(patch.message !== undefined && { message: patch.message }),
-    })
-    .where(eq(rsvpResponse.id, id));
+  const set: Record<string, unknown> = {};
+  if (patch.guestName !== undefined) set.guest_name = patch.guestName;
+  if (patch.attending !== undefined) set.attending = patch.attending;
+  if (patch.headcount !== undefined) set.headcount = patch.headcount;
+  if (patch.perMoment !== undefined) set.per_moment = patch.perMoment;
+  if (patch.dietary !== undefined) set.dietary = patch.dietary;
+  if (patch.message !== undefined) set.message = patch.message;
+  if (Object.keys(set).length === 0) return;
+  done(await supa.from('rsvp_response').update(set).eq('id', id));
 }
 
 export async function deleteResponse(id: string): Promise<void> {
-  if (!db) {
+  if (!supa) {
     const store = demoStore();
     store.responses = store.responses.filter((r) => r.id !== id);
     return;
   }
-  await db.delete(rsvpResponse).where(eq(rsvpResponse.id, id));
+  done(await supa.from('rsvp_response').delete().eq('id', id));
 }
 
 // ── Mutations : contenu & paramètres ─────────────────────────────
@@ -526,7 +615,7 @@ export async function updateWeddingContent(input: {
   venue?: string | null;
   welcomeText?: string;
 }): Promise<void> {
-  if (!db) {
+  if (!supa) {
     const w = demoStore().wedding;
     if (input.coupleNames !== undefined) w.coupleNames = input.coupleNames;
     if (input.eventDate !== undefined) w.eventDate = input.eventDate;
@@ -534,20 +623,15 @@ export async function updateWeddingContent(input: {
     if (input.welcomeText !== undefined) w.welcomeText = input.welcomeText;
     return;
   }
-  const [w] = await db.select({ id: wedding.id }).from(wedding).limit(1);
+  const w = ok<Array<{ id: string }>>(await supa.from('wedding').select('id').limit(1))[0];
   if (!w) return;
-  await db
-    .update(wedding)
-    .set({
-      ...(input.coupleNames !== undefined && { coupleNames: input.coupleNames }),
-      ...(input.eventDate !== undefined && {
-        eventDate: input.eventDate ? new Date(input.eventDate) : null,
-      }),
-      ...(input.venue !== undefined && { venue: input.venue }),
-      ...(input.welcomeText !== undefined && { welcomeText: input.welcomeText }),
-      updatedAt: new Date(),
-    })
-    .where(eq(wedding.id, w.id));
+  const set: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (input.coupleNames !== undefined) set.couple_names = input.coupleNames;
+  if (input.eventDate !== undefined)
+    set.event_date = input.eventDate ? new Date(input.eventDate).toISOString() : null;
+  if (input.venue !== undefined) set.venue = input.venue;
+  if (input.welcomeText !== undefined) set.welcome_text = input.welcomeText;
+  done(await supa.from('wedding').update(set).eq('id', w.id));
 }
 
 export async function updateSettings(input: {
@@ -557,7 +641,7 @@ export async function updateSettings(input: {
   locales?: string[];
   siteDomain?: string | null;
 }): Promise<void> {
-  if (!db) {
+  if (!supa) {
     const w = demoStore().wedding;
     if (input.notifyEmails !== undefined) w.notifyEmails = input.notifyEmails;
     if (input.notifyEnabled !== undefined) w.notifyEnabled = input.notifyEnabled;
@@ -566,26 +650,21 @@ export async function updateSettings(input: {
     if (input.siteDomain !== undefined) w.siteDomain = input.siteDomain;
     return;
   }
-  const [w] = await db.select({ id: wedding.id }).from(wedding).limit(1);
+  const w = ok<Array<{ id: string }>>(await supa.from('wedding').select('id').limit(1))[0];
   if (!w) return;
-  await db
-    .update(wedding)
-    .set({
-      ...(input.notifyEmails !== undefined && { notifyEmails: input.notifyEmails }),
-      ...(input.notifyEnabled !== undefined && { notifyEnabled: input.notifyEnabled }),
-      ...(input.rsvpDeadline !== undefined && {
-        rsvpDeadline: input.rsvpDeadline ? new Date(input.rsvpDeadline) : null,
-      }),
-      ...(input.locales !== undefined && { locales: input.locales }),
-      ...(input.siteDomain !== undefined && { siteDomain: input.siteDomain }),
-      updatedAt: new Date(),
-    })
-    .where(eq(wedding.id, w.id));
+  const set: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (input.notifyEmails !== undefined) set.notify_emails = input.notifyEmails;
+  if (input.notifyEnabled !== undefined) set.notify_enabled = input.notifyEnabled;
+  if (input.rsvpDeadline !== undefined)
+    set.rsvp_deadline = input.rsvpDeadline ? new Date(input.rsvpDeadline).toISOString() : null;
+  if (input.locales !== undefined) set.locales = input.locales;
+  if (input.siteDomain !== undefined) set.site_domain = input.siteDomain;
+  done(await supa.from('wedding').update(set).eq('id', w.id));
 }
 
 // ── Mutations : moments ──────────────────────────────────────────
 export async function createMoment(input: { title: string }): Promise<Moment> {
-  if (!db) {
+  if (!supa) {
     const store = demoStore();
     const m: Moment = {
       id: nextDemoId('m'),
@@ -602,52 +681,50 @@ export async function createMoment(input: { title: string }): Promise<Moment> {
     store.moments.push(m);
     return m;
   }
-  const [w] = await db.select({ id: wedding.id }).from(wedding).limit(1);
+  const w = ok<Array<{ id: string }>>(await supa.from('wedding').select('id').limit(1))[0];
   if (!w) throw new Error('Aucun mariage configuré');
-  const [{ count } = { count: 0 }] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(moment);
-  const [row] = await db
-    .insert(moment)
-    .values({ weddingId: w.id, title: input.title, sortOrder: count })
-    .returning();
-  return toMoment(row!, []);
+  const { count } = await supa.from('moment').select('*', { count: 'exact', head: true });
+  const row = ok<MomentSel>(
+    await supa
+      .from('moment')
+      .insert({ wedding_id: w.id, title: input.title, sort_order: count ?? 0 })
+      .select(MOMENT_COLS)
+      .single(),
+  );
+  return toMoment(row, []);
 }
 
 export async function updateMoment(
   id: string,
   input: Partial<Pick<Moment, 'title' | 'startsAt' | 'location' | 'description' | 'dressCode'>>,
 ): Promise<void> {
-  if (!db) {
+  if (!supa) {
     const m = demoStore().moments.find((x) => x.id === id);
     if (m) Object.assign(m, input);
     return;
   }
-  await db
-    .update(moment)
-    .set({
-      ...(input.title !== undefined && { title: input.title }),
-      ...(input.startsAt !== undefined && {
-        startsAt: input.startsAt ? new Date(input.startsAt) : null,
-      }),
-      ...(input.location !== undefined && { location: input.location }),
-      ...(input.description !== undefined && { description: input.description }),
-      ...(input.dressCode !== undefined && { dressCode: input.dressCode }),
-    })
-    .where(eq(moment.id, id));
+  const set: Record<string, unknown> = {};
+  if (input.title !== undefined) set.title = input.title;
+  if (input.startsAt !== undefined)
+    set.starts_at = input.startsAt ? new Date(input.startsAt).toISOString() : null;
+  if (input.location !== undefined) set.location = input.location;
+  if (input.description !== undefined) set.description = input.description;
+  if (input.dressCode !== undefined) set.dress_code = input.dressCode;
+  if (Object.keys(set).length === 0) return;
+  done(await supa.from('moment').update(set).eq('id', id));
 }
 
 export async function deleteMoment(id: string): Promise<void> {
-  if (!db) {
+  if (!supa) {
     const store = demoStore();
     store.moments = store.moments.filter((m) => m.id !== id);
     return;
   }
-  await db.delete(moment).where(eq(moment.id, id));
+  done(await supa.from('moment').delete().eq('id', id));
 }
 
 export async function reorderMoments(orderedIds: string[]): Promise<void> {
-  if (!db) {
+  if (!supa) {
     const store = demoStore();
     const index = new Map(orderedIds.map((id, i) => [id, i]));
     store.moments.forEach((m) => {
@@ -656,21 +733,22 @@ export async function reorderMoments(orderedIds: string[]): Promise<void> {
     store.moments.sort(bySortOrder);
     return;
   }
-  const database = db;
+  const client = supa;
   await Promise.all(
-    orderedIds.map((id, i) =>
-      database.update(moment).set({ sortOrder: i }).where(eq(moment.id, id)),
-    ),
+    orderedIds.map((id, i) => client.from('moment').update({ sort_order: i }).eq('id', id)),
   );
 }
 
 /** Insère une ligne `media` (image) et renvoie son id. */
 async function insertImageMedia(storagePath: string, url: string): Promise<string | null> {
-  if (!db) return null;
-  const [row] = await db
-    .insert(media)
-    .values({ kind: 'image', storagePath, url })
-    .returning({ id: media.id });
+  if (!supa) return null;
+  const row = ok<{ id: string }>(
+    await supa
+      .from('media')
+      .insert({ kind: 'image', storage_path: storagePath, url })
+      .select('id')
+      .single(),
+  );
   return row?.id ?? null;
 }
 
@@ -679,7 +757,7 @@ export async function addMomentAsset(
   momentId: string,
   input: { url: string; storagePath: string },
 ): Promise<MomentAsset> {
-  if (!db) {
+  if (!supa) {
     const m = demoStore().moments.find((x) => x.id === momentId);
     const asset: MomentAsset = {
       id: nextDemoId('ma'),
@@ -691,31 +769,34 @@ export async function addMomentAsset(
   }
   const mediaId = await insertImageMedia(input.storagePath, input.url);
   if (!mediaId) throw new Error('Média non créé');
-  const [{ count } = { count: 0 }] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(momentMedia)
-    .where(eq(momentMedia.momentId, momentId));
-  const [row] = await db
-    .insert(momentMedia)
-    .values({ momentId, mediaId, sortOrder: count })
-    .returning();
-  return { id: row!.id, url: input.url, sortOrder: row!.sortOrder };
+  const { count } = await supa
+    .from('moment_media')
+    .select('*', { count: 'exact', head: true })
+    .eq('moment_id', momentId);
+  const row = ok<{ id: string; sortOrder: number }>(
+    await supa
+      .from('moment_media')
+      .insert({ moment_id: momentId, media_id: mediaId, sort_order: count ?? 0 })
+      .select('id, sortOrder:sort_order')
+      .single(),
+  );
+  return { id: row.id, url: input.url, sortOrder: row.sortOrder };
 }
 
 /** Retire une photo de la galerie (id = ligne moment_media). */
 export async function removeMomentAsset(assetId: string): Promise<void> {
-  if (!db) {
+  if (!supa) {
     for (const m of demoStore().moments) {
       m.media = m.media.filter((a) => a.id !== assetId);
     }
     return;
   }
-  await db.delete(momentMedia).where(eq(momentMedia.id, assetId));
+  done(await supa.from('moment_media').delete().eq('id', assetId));
 }
 
 /** Réordonne la galerie d'un moment (liste ordonnée d'ids moment_media). */
 export async function reorderMomentAssets(momentId: string, orderedIds: string[]): Promise<void> {
-  if (!db) {
+  if (!supa) {
     const m = demoStore().moments.find((x) => x.id === momentId);
     if (m) {
       const index = new Map(orderedIds.map((id, i) => [id, i]));
@@ -726,16 +807,17 @@ export async function reorderMomentAssets(momentId: string, orderedIds: string[]
     }
     return;
   }
-  const database = db;
+  const client = supa;
   await Promise.all(
-    orderedIds.map((id, i) =>
-      database.update(momentMedia).set({ sortOrder: i }).where(eq(momentMedia.id, id)),
-    ),
+    orderedIds.map((id, i) => client.from('moment_media').update({ sort_order: i }).eq('id', id)),
   );
 }
 
 // ── Cartes « détails pratiques » ─────────────────────────────────
-function toDetailCard(row: DetailCardRow, mediaUrl: string | null): DetailCard {
+function toDetailCard(
+  row: { id: string; label: string; value: string; sortOrder: number },
+  mediaUrl: string | null,
+): DetailCard {
   return { id: row.id, label: row.label, value: row.value, mediaUrl, sortOrder: row.sortOrder };
 }
 
@@ -745,15 +827,23 @@ function toDetailCard(row: DetailCardRow, mediaUrl: string | null): DetailCard {
  * par défaut (texte seul) pour ne jamais casser le rendu du site.
  */
 export async function getDetailCards(): Promise<DetailCard[]> {
-  if (!db) return demoStore().detailCards.map((c) => ({ ...c })).sort(bySortOrder);
+  if (!supa) return demoStore().detailCards.map((c) => ({ ...c })).sort(bySortOrder);
   try {
-    const rows = await db
-      .select({ card: detailCard, mediaUrl: media.url })
-      .from(detailCard)
-      .leftJoin(media, eq(detailCard.mediaId, media.id))
-      .orderBy(asc(detailCard.sortOrder));
+    type Emb = { url: string | null };
+    const res = await supa
+      .from('detail_card')
+      .select('id, label, value, sortOrder:sort_order, media(url)')
+      .order('sort_order', { ascending: true });
+    if (res.error) throw new Error(res.error.message);
+    const rows = (res.data ?? []) as unknown as Array<{
+      id: string;
+      label: string;
+      value: string;
+      sortOrder: number;
+      media: Emb | Emb[] | null;
+    }>;
     if (rows.length === 0) return demoDetailCards.map((c) => ({ ...c }));
-    return rows.map((r) => toDetailCard(r.card, r.mediaUrl));
+    return rows.map((r) => toDetailCard(r, firstOf(r.media)?.url ?? null));
   } catch {
     // Table absente (script 03_detail_cards.sql non exécuté) → repli défensif.
     return demoDetailCards.map((c) => ({ ...c }));
@@ -764,7 +854,7 @@ export async function createDetailCard(input: {
   label: string;
   value: string;
 }): Promise<DetailCard> {
-  if (!db) {
+  if (!supa) {
     const store = demoStore();
     const c: DetailCard = {
       id: nextDemoId('d'),
@@ -776,23 +866,24 @@ export async function createDetailCard(input: {
     store.detailCards.push(c);
     return c;
   }
-  const [w] = await db.select({ id: wedding.id }).from(wedding).limit(1);
+  const w = ok<Array<{ id: string }>>(await supa.from('wedding').select('id').limit(1))[0];
   if (!w) throw new Error('Aucun mariage configuré');
-  const [{ count } = { count: 0 }] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(detailCard);
-  const [row] = await db
-    .insert(detailCard)
-    .values({ weddingId: w.id, label: input.label, value: input.value, sortOrder: count })
-    .returning();
-  return toDetailCard(row!, null);
+  const { count } = await supa.from('detail_card').select('*', { count: 'exact', head: true });
+  const row = ok<{ id: string; label: string; value: string; sortOrder: number }>(
+    await supa
+      .from('detail_card')
+      .insert({ wedding_id: w.id, label: input.label, value: input.value, sort_order: count ?? 0 })
+      .select(DETAIL_COLS_BASE)
+      .single(),
+  );
+  return toDetailCard(row, null);
 }
 
 export async function updateDetailCard(
   id: string,
   input: { label?: string; value?: string },
 ): Promise<void> {
-  if (!db) {
+  if (!supa) {
     const c = demoStore().detailCards.find((x) => x.id === id);
     if (c) {
       if (input.label !== undefined) c.label = input.label;
@@ -800,39 +891,37 @@ export async function updateDetailCard(
     }
     return;
   }
-  await db
-    .update(detailCard)
-    .set({
-      ...(input.label !== undefined && { label: input.label }),
-      ...(input.value !== undefined && { value: input.value }),
-    })
-    .where(eq(detailCard.id, id));
+  const set: Record<string, unknown> = {};
+  if (input.label !== undefined) set.label = input.label;
+  if (input.value !== undefined) set.value = input.value;
+  if (Object.keys(set).length === 0) return;
+  done(await supa.from('detail_card').update(set).eq('id', id));
 }
 
 export async function setDetailCardImage(
   id: string,
   input: { url: string; storagePath: string } | null,
 ): Promise<void> {
-  if (!db) {
+  if (!supa) {
     const c = demoStore().detailCards.find((x) => x.id === id);
     if (c) c.mediaUrl = input?.url ?? null;
     return;
   }
   if (!input) {
-    await db.update(detailCard).set({ mediaId: null }).where(eq(detailCard.id, id));
+    done(await supa.from('detail_card').update({ media_id: null }).eq('id', id));
     return;
   }
   const mediaId = await insertImageMedia(input.storagePath, input.url);
-  await db.update(detailCard).set({ mediaId }).where(eq(detailCard.id, id));
+  done(await supa.from('detail_card').update({ media_id: mediaId }).eq('id', id));
 }
 
 export async function deleteDetailCard(id: string): Promise<void> {
-  if (!db) {
+  if (!supa) {
     const store = demoStore();
     store.detailCards = store.detailCards.filter((c) => c.id !== id);
     return;
   }
-  await db.delete(detailCard).where(eq(detailCard.id, id));
+  done(await supa.from('detail_card').delete().eq('id', id));
 }
 
 // ── Comparateurs ─────────────────────────────────────────────────
