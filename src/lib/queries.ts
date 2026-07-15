@@ -364,6 +364,52 @@ export async function saveRsvp(
   return { response: toResponse(row, p.name), parcours: p };
 }
 
+/** Édition d'une réponse RSVP par le couple (dashboard). */
+export async function updateResponse(
+  id: string,
+  patch: {
+    guestName?: string;
+    attending?: Attending;
+    headcount?: number;
+    perMoment?: Record<string, boolean>;
+    dietary?: string | null;
+    message?: string | null;
+  },
+): Promise<void> {
+  if (!db) {
+    const r = demoStore().responses.find((x) => x.id === id);
+    if (r) {
+      if (patch.guestName !== undefined) r.guestName = patch.guestName;
+      if (patch.attending !== undefined) r.attending = patch.attending;
+      if (patch.headcount !== undefined) r.headcount = patch.headcount;
+      if (patch.perMoment !== undefined) r.perMoment = patch.perMoment;
+      if (patch.dietary !== undefined) r.dietary = patch.dietary;
+      if (patch.message !== undefined) r.message = patch.message;
+    }
+    return;
+  }
+  await db
+    .update(rsvpResponse)
+    .set({
+      ...(patch.guestName !== undefined && { guestName: patch.guestName }),
+      ...(patch.attending !== undefined && { attending: patch.attending }),
+      ...(patch.headcount !== undefined && { headcount: patch.headcount }),
+      ...(patch.perMoment !== undefined && { perMoment: patch.perMoment }),
+      ...(patch.dietary !== undefined && { dietary: patch.dietary }),
+      ...(patch.message !== undefined && { message: patch.message }),
+    })
+    .where(eq(rsvpResponse.id, id));
+}
+
+export async function deleteResponse(id: string): Promise<void> {
+  if (!db) {
+    const store = demoStore();
+    store.responses = store.responses.filter((r) => r.id !== id);
+    return;
+  }
+  await db.delete(rsvpResponse).where(eq(rsvpResponse.id, id));
+}
+
 // ── Mutations : contenu & paramètres ─────────────────────────────
 export async function updateWeddingContent(input: {
   coupleNames?: string;
