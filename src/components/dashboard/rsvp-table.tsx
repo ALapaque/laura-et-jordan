@@ -17,28 +17,46 @@ const FILTERS: { id: Filter; label: string }[] = [
 
 export function RsvpTable({
   responses,
-  momentTitles,
+  moments,
 }: {
   responses: RsvpResponse[];
-  momentTitles: Record<string, string>;
+  moments: { id: string; title: string }[];
 }) {
   const [filter, setFilter] = useState<Filter>('all');
+  const [momentFilter, setMomentFilter] = useState<string>('all');
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
+
+  const momentTitles = useMemo(
+    () => Object.fromEntries(moments.map((m) => [m.id, m.title])),
+    [moments],
+  );
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return responses.filter((r) => {
       if (filter !== 'all' && r.attending !== filter) return false;
+      if (momentFilter !== 'all' && !r.perMoment[momentFilter]) return false;
       if (q && !`${r.guestName} ${r.parcoursName}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [responses, filter, query]);
+  }, [responses, filter, momentFilter, query]);
+
+  // Récapitulatif « présents à ce moment » (utile pour le traiteur).
+  const momentStat = useMemo(() => {
+    if (momentFilter === 'all') return null;
+    const present = responses.filter((r) => r.perMoment[momentFilter]);
+    return {
+      title: momentTitles[momentFilter] ?? '',
+      count: present.length,
+      people: present.reduce((a, r) => a + r.headcount, 0),
+    };
+  }, [responses, momentFilter, momentTitles]);
 
   return (
     <div style={{ animation: 'jlFadeIn .3s ease' }}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {FILTERS.map((f) => {
             const on = filter === f.id;
             return (
@@ -54,6 +72,26 @@ export function RsvpTable({
               </button>
             );
           })}
+          {moments.length > 0 && (
+            <select
+              value={momentFilter}
+              onChange={(e) => setMomentFilter(e.target.value)}
+              aria-label="Filtrer par moment"
+              className={clsx(
+                'rounded-full border px-3.5 py-2 font-body text-[13px] outline-none transition-colors focus:border-olive',
+                momentFilter !== 'all'
+                  ? 'border-gold bg-accent-soft text-ink'
+                  : 'border-line bg-transparent text-muted',
+              )}
+            >
+              <option value="all">Tous les moments</option>
+              {moments.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.title}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
         <div className="flex items-center gap-2.5">
           <input
@@ -70,6 +108,18 @@ export function RsvpTable({
           </a>
         </div>
       </div>
+
+      {momentStat && (
+        <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-gold/40 bg-accent-soft/40 px-4 py-2.5 font-body text-[13px] text-ink">
+          <span>
+            <strong className="font-medium">{momentStat.people}</strong>
+            {` ${momentStat.people > 1 ? 'personnes attendues' : 'personne attendue'} à « ${momentStat.title} »`}
+          </span>
+          <span className="text-muted">
+            {`· ${momentStat.count} réponse${momentStat.count > 1 ? 's' : ''}`}
+          </span>
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-[14px] border border-line bg-surface">
         <div className="grid grid-cols-[1.6fr_1.4fr_0.7fr_1fr] gap-2.5 bg-bg px-[18px] py-3 font-body text-[10px] uppercase tracking-[0.1em] text-sage">
