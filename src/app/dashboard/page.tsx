@@ -1,10 +1,11 @@
+import { withDbRetry } from '@/db';
 import { StatusBadge } from '@/components/dashboard/status-badge';
 import { getStats } from '@/lib/queries';
 
 const BAR_COLORS = ['#5C6441', '#858052', '#D2AE47'];
 
 export default async function OverviewPage() {
-  const stats = await getStats();
+  const stats = await withDbRetry(() => getStats());
   const maxResp = Math.max(1, ...stats.perParcours.map((p) => p.count));
 
   const kpis = [

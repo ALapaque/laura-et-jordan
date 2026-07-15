@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
+import { withDbRetry } from '@/db';
 import { getSessionUser } from '@/lib/auth';
 import { isDemoMode } from '@/lib/queries';
 import { getWedding } from '@/lib/queries';
@@ -17,7 +18,7 @@ export const dynamic = 'force-dynamic';
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();
   if (!user) redirect('/login');
-  const wedding = await getWedding();
+  const wedding = await withDbRetry(() => getWedding());
   const domain =
     wedding.siteDomain ??
     (process.env.NEXT_PUBLIC_SITE_URL

@@ -1,12 +1,11 @@
+import { withDbRetry } from '@/db';
 import { LinksManager } from '@/components/dashboard/links-manager';
 import { getMoments, getParcoursList, getResponses } from '@/lib/queries';
 
 export default async function LinksPage() {
-  const [parcours, moments, responses] = await Promise.all([
-    getParcoursList(),
-    getMoments(),
-    getResponses(),
-  ]);
+  const [parcours, moments, responses] = await withDbRetry(() =>
+    Promise.all([getParcoursList(), getMoments(), getResponses()]),
+  );
 
   const counts = new Map<string, number>();
   for (const r of responses) counts.set(r.parcoursId, (counts.get(r.parcoursId) ?? 0) + 1);

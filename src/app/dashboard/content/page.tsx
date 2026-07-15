@@ -1,9 +1,12 @@
+import { withDbRetry } from '@/db';
 import { ContentEditor } from '@/components/dashboard/content-editor';
 import { DetailCardsManager } from '@/components/dashboard/detail-cards-manager';
 import { getDetailCards, getWedding } from '@/lib/queries';
 
 export default async function ContentPage() {
-  const [wedding, detailCards] = await Promise.all([getWedding(), getDetailCards()]);
+  const [wedding, detailCards] = await withDbRetry(() =>
+    Promise.all([getWedding(), getDetailCards()]),
+  );
   return (
     <div className="flex flex-col gap-8">
       <ContentEditor
