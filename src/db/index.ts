@@ -44,8 +44,15 @@ function createDb() {
       // texte et sont parsés de façon fiable par Drizzle.
       fetch_types: false,
       ssl: sslMode(databaseUrl),
-      max: 5,
-      idle_timeout: 20,
+      // Serverless (Vercel) + pooler Supabase : une fonction ne sert qu'une
+      // requête à la fois → 1 connexion par instance suffit. Un pool plus grand
+      // ne fait qu'accumuler des connexions inactives qui, réutilisées « à
+      // chaud » après le gel de la fonction, sont périmées côté pooler et
+      // pendent la requête → 504 FUNCTION_INVOCATION_TIMEOUT au 2e chargement.
+      max: 1,
+      idle_timeout: 20, // ferme les connexions inactives
+      max_lifetime: 60 * 30, // recycle les connexions (évite les sockets trop vieux)
+      connect_timeout: 15, // échoue vite au lieu de rester pendu à la connexion
     });
   if (process.env.NODE_ENV !== 'production') globalForDb._pgClient = client;
   return drizzle(client, { schema });
