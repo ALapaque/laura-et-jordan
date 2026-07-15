@@ -10,19 +10,32 @@ type StepKey = 'presence' | 'names' | 'moments' | 'dietary' | 'message';
 
 const DIET_CHIPS = ['Aucun', 'Végétarien', 'Vegan', 'Sans gluten'];
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Le pas « names » (email + nom) est toujours présent : l'email est requis et
+// sert d'identifiant pour retrouver/modifier sa réponse.
 function computeSteps(attending: Attending | null, fields: RsvpFields, momentsCount: number): StepKey[] {
   if (attending === 'no') {
-    const steps: StepKey[] = ['presence'];
+    const steps: StepKey[] = ['presence', 'names'];
     if (fields.askMessage) steps.push('message');
     return steps;
   }
-  const steps: StepKey[] = ['presence'];
-  if (fields.askNames || fields.askHeadcount) steps.push('names');
+  const steps: StepKey[] = ['presence', 'names'];
   if (fields.askPerMoment && momentsCount > 0) steps.push('moments');
   if (fields.askDietary) steps.push('dietary');
   if (fields.askMessage) steps.push('message');
   return steps;
 }
+
+type LookupResponse = {
+  guestName: string;
+  email: string;
+  attending: Attending;
+  headcount: number;
+  perMoment: Record<string, boolean>;
+  dietary: string;
+  message: string;
+};
 
 export function RsvpForm({
   token,
@@ -40,6 +53,7 @@ export function RsvpForm({
   const [attending, setAttending] = useState<Attending | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
   const [guestName, setGuestName] = useState('');
+  const [email, setEmail] = useState('');
   const [headcount, setHeadcount] = useState(2);
   const [perMoment, setPerMoment] = useState<Record<string, boolean>>({});
   const [dietPick, setDietPick] = useState('');
@@ -49,6 +63,13 @@ export function RsvpForm({
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Modification d'une réponse existante (retrouvée par email).
+  const [lookupOpen, setLookupOpen] = useState(false);
+  const [lookupEmail, setLookupEmail] = useState('');
+  const [lookingUp, setLookingUp] = useState(false);
+  const [lookupMsg, setLookupMsg] = useState<string | null>(null);
+  const [editingExisting, setEditingExisting] = useState(false);
+
   const steps = useMemo(
     () => computeSteps(attending, rsvpFields, moments.length),
     [attending, rsvpFields, moments.length],
@@ -57,9 +78,11 @@ export function RsvpForm({
   const isLast = stepIndex >= steps.length - 1;
   const maxHead = rsvpFields.maxHeadcount || 12;
 
+  const emailValid = EMAIL_RE.test(email.trim());
   const nextDisabled =
     (stepKey === 'presence' && !attending) ||
-    (stepKey === 'names' && attending !== 'no' && rsvpFields.askNames && guestName.trim() === '');
+    (stepKey === 'names' &&
+      (!emailValid || (attending !== 'no' && rsvpFields.askNames && guestName.trim() === '')));
 
   function chooseAttending(value: Attending) {
     setAttending(value);
@@ -76,6 +99,50 @@ export function RsvpForm({
     setDietary(value === 'Aucun' ? '' : value);
   }
 
+  async function retrieveResponse() {
+    const em = lookupEmail.trim();
+    if (!EMAIL_RE.test(em)) {
+      setLookupMsg('Merci d’entrer un email valide.');
+      return;
+    }
+    setLookingUp(true);
+    setLookupMsg(null);
+    try {
+      const res = await fetch('/api/rsvp/lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, email: em }),
+      });
+      const body = (await res.json().catch(() => null)) as {
+        found?: boolean;
+        response?: LookupResponse;
+        error?: string;
+      } | null;
+      if (!res.ok) {
+        setLookupMsg(body?.error ?? 'Une erreur est survenue. Réessayez.');
+      } else if (body?.found && body.response) {
+        const r = body.response;
+        setAttending(r.attending);
+        setGuestName(r.guestName ?? '');
+        setEmail(r.email || em);
+        setHeadcount(r.headcount || 1);
+        setPerMoment(r.perMoment ?? {});
+        setDietary(r.dietary ?? '');
+        setDietPick('');
+        setMessage(r.message ?? '');
+        setEditingExisting(true);
+        setLookupOpen(false);
+        setStepIndex(0);
+      } else {
+        setLookupMsg('Aucune réponse trouvée pour cet email.');
+      }
+    } catch {
+      setLookupMsg('Connexion impossible. Réessayez.');
+    } finally {
+      setLookingUp(false);
+    }
+  }
+
   async function advance() {
     if (nextDisabled) return;
     if (!isLast) {
@@ -90,6 +157,7 @@ export function RsvpForm({
     const payload = {
       token,
       guestName,
+      email,
       attending: attending ?? 'maybe',
       headcount,
       perMoment,
@@ -135,6 +203,12 @@ export function RsvpForm({
 
   return (
     <div>
+      {editingExisting && (
+        <div className="mb-5 rounded-xl border border-gold/40 bg-accent-soft/50 px-4 py-2.5 text-center font-body text-[13px] text-ink">
+          Votre réponse a été retrouvée — modifiez-la puis renvoyez-la.
+        </div>
+      )}
+
       {/* points d'étape */}
       <div className="mb-7 flex items-center justify-center gap-2">
         {steps.map((key, i) => (
@@ -165,11 +239,75 @@ export function RsvpForm({
                 Non, malheureusement
               </ChoiceButton>
             </div>
+
+            {/* Modifier une réponse déjà envoyée (via email) */}
+            <div className="mt-6 text-center">
+              {!lookupOpen ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLookupOpen(true);
+                    setLookupMsg(null);
+                  }}
+                  className="font-body text-[13px] text-olive underline decoration-gold/50 underline-offset-4 transition-colors hover:text-ink"
+                >
+                  Déjà répondu ? Modifier ma réponse
+                </button>
+              ) : (
+                <div className="mx-auto max-w-[340px] rounded-xl border border-line bg-surface p-4 text-left">
+                  <label className="mb-2 block font-body text-[11px] uppercase tracking-[0.14em] text-olive">
+                    Votre email
+                  </label>
+                  <input
+                    type="email"
+                    value={lookupEmail}
+                    onChange={(e) => setLookupEmail(e.target.value)}
+                    placeholder="vous@exemple.be"
+                    className="w-full rounded-[9px] border border-line bg-bg px-3.5 py-3 font-body text-[16px] text-ink outline-none focus:border-olive"
+                  />
+                  {lookupMsg && (
+                    <p className="mt-2 font-body text-[13px] text-[#9a3b2e]">{lookupMsg}</p>
+                  )}
+                  <div className="mt-3 flex gap-2.5">
+                    <button
+                      type="button"
+                      onClick={retrieveResponse}
+                      disabled={lookingUp}
+                      className="rounded-[9px] border-none bg-olive px-5 py-2.5 font-body text-[12px] uppercase tracking-[0.12em] text-panel transition-colors hover:bg-ink disabled:opacity-50"
+                    >
+                      {lookingUp ? 'Recherche…' : 'Retrouver'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLookupOpen(false)}
+                      className="rounded-[9px] border border-line bg-transparent px-4 py-2.5 font-body text-[12px] uppercase tracking-[0.12em] text-olive"
+                    >
+                      Annuler
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
         {stepKey === 'names' && (
           <div className="mx-auto flex max-w-[360px] flex-col gap-6">
+            <div>
+              <label className="mb-2 block font-body text-[11px] uppercase tracking-[0.14em] text-olive">
+                Votre email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="vous@exemple.be"
+                className="w-full rounded-[9px] border border-line bg-surface px-3.5 py-3 font-body text-[16px] text-ink outline-none focus:border-olive"
+              />
+              <p className="mt-1.5 font-body text-[12px] text-muted">
+                Pour retrouver et modifier votre réponse plus tard.
+              </p>
+            </div>
             {rsvpFields.askNames && (
               <div>
                 <label className="mb-2 block font-body text-[11px] uppercase tracking-[0.14em] text-olive">
@@ -183,7 +321,7 @@ export function RsvpForm({
                 />
               </div>
             )}
-            {rsvpFields.askHeadcount && (
+            {rsvpFields.askHeadcount && attending !== 'no' && (
               <div>
                 <label className="mb-2 block font-body text-[11px] uppercase tracking-[0.14em] text-olive">
                   Nombre de personnes

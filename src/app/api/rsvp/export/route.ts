@@ -11,13 +11,14 @@ export async function GET() {
   if (!user) return new Response('Non autorisé', { status: 401 });
 
   const responses = await getResponses();
-  const header = ['Nom', 'Parcours', 'Statut', 'Personnes', 'Régime', 'Message', 'Date'];
+  const header = ['Nom', 'Email', 'Parcours', 'Statut', 'Personnes', 'Régime', 'Message', 'Date'];
   const lines = [header.map(csvCell).join(',')];
 
   for (const r of responses) {
     lines.push(
       [
         r.guestName,
+        r.email ?? '',
         r.parcoursName,
         ATTENDING_LABELS[r.attending],
         String(r.headcount),

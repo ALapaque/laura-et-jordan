@@ -19,6 +19,7 @@ import {
   type MomentAsset,
   type Parcours,
   type RsvpFields,
+  type RsvpPrefill,
   type RsvpResponse,
   type Wedding,
 } from './types';
@@ -84,12 +85,13 @@ function toParcours(row: ParcoursRow): Parcours {
   };
 }
 
-function toResponse(row: RsvpResponseRow, parcoursName: string): RsvpResponse {
+function toResponse(row: RsvpResponseRow, parcoursName: string, email: string | null): RsvpResponse {
   return {
     id: row.id,
     parcoursId: row.parcoursId,
     parcoursName,
     guestName: row.guestName,
+    email,
     attending: row.attending,
     headcount: row.headcount,
     perMoment: row.perMoment,
@@ -198,7 +200,29 @@ export async function getResponses(): Promise<RsvpResponse[]> {
   const parcoursList = await getParcoursList();
   const nameById = new Map(parcoursList.map((p) => [p.id, p.name]));
   const rows = await db.select().from(rsvpResponse).orderBy(desc(rsvpResponse.createdAt));
-  return rows.map((r) => toResponse(r, nameById.get(r.parcoursId) ?? '—'));
+  const emailById = await loadEmailMap();
+  return rows.map((r) =>
+    toResponse(r, nameById.get(r.parcoursId) ?? '—', emailById.get(r.id) ?? null),
+  );
+}
+
+/**
+ * L'email est une colonne *additive* (`rsvp_response.email`, script 05).
+ * Pour ne JAMAIS casser les lectures si le script n'est pas encore lancé, on
+ * la lit hors du `select()` Drizzle principal, en SQL brut tolérant aux erreurs.
+ */
+async function loadEmailMap(): Promise<Map<string, string | null>> {
+  const map = new Map<string, string | null>();
+  if (!db) return map;
+  try {
+    const rows = (await db.execute(
+      sql`select id, email from rsvp_response`,
+    )) as unknown as Array<{ id: string; email: string | null }>;
+    for (const r of rows) map.set(r.id, r.email ?? null);
+  } catch {
+    // Colonne `email` absente (script 05 non exécuté) → aucun email.
+  }
+  return map;
 }
 
 // ── Statistiques dashboard ───────────────────────────────────────
@@ -281,10 +305,11 @@ export async function deleteParcours(id: string): Promise<void> {
   await db.delete(parcours).where(eq(parcours.id, id));
 }
 
-// ── Mutations : RSVP (upsert par parcours + nom) ─────────────────
+// ── Mutations : RSVP (upsert par parcours + email, repli sur le nom) ──
 export interface SaveRsvpInput {
   parcoursId: string;
   guestName: string;
+  email: string | null;
   attending: Attending;
   headcount: number;
   perMoment: Record<string, boolean>;
@@ -300,19 +325,24 @@ export async function saveRsvp(
   const parcoursList = await getParcoursList();
   const p = parcoursList.find((x) => x.id === input.parcoursId);
   if (!p) throw new Error('Parcours introuvable');
+  const email = input.email?.trim() || null;
+  const emailLc = email?.toLowerCase();
 
   if (!db) {
     const store = demoStore();
     const existing = store.responses.find(
       (r) =>
         r.parcoursId === input.parcoursId &&
-        r.guestName.trim().toLowerCase() === input.guestName.trim().toLowerCase(),
+        (emailLc
+          ? r.email?.trim().toLowerCase() === emailLc
+          : r.guestName.trim().toLowerCase() === input.guestName.trim().toLowerCase()),
     );
     const base: RsvpResponse = {
       id: existing?.id ?? nextDemoId('r'),
       parcoursId: input.parcoursId,
       parcoursName: p.name,
       guestName: input.guestName,
+      email,
       attending: input.attending,
       headcount: input.headcount,
       perMoment: input.perMoment,
@@ -326,16 +356,31 @@ export async function saveRsvp(
     return { response: base, parcours: p };
   }
 
-  const existing = await db
-    .select()
-    .from(rsvpResponse)
-    .where(
-      and(
-        eq(rsvpResponse.parcoursId, input.parcoursId),
-        sql`lower(${rsvpResponse.guestName}) = lower(${input.guestName})`,
-      ),
-    )
-    .limit(1);
+  // Réponse existante : par email d'abord (identifiant fiable), sinon par nom.
+  let existingId: string | null = null;
+  if (email) {
+    try {
+      const found = (await db.execute(
+        sql`select id from rsvp_response where parcours_id = ${input.parcoursId} and lower(email) = lower(${email}) order by created_at desc limit 1`,
+      )) as unknown as Array<{ id: string }>;
+      if (found[0]) existingId = found[0].id;
+    } catch {
+      // Colonne `email` absente → repli sur le nom.
+    }
+  }
+  if (!existingId) {
+    const existing = await db
+      .select({ id: rsvpResponse.id })
+      .from(rsvpResponse)
+      .where(
+        and(
+          eq(rsvpResponse.parcoursId, input.parcoursId),
+          sql`lower(${rsvpResponse.guestName}) = lower(${input.guestName})`,
+        ),
+      )
+      .limit(1);
+    if (existing[0]) existingId = existing[0].id;
+  }
 
   const values = {
     parcoursId: input.parcoursId,
@@ -350,18 +395,82 @@ export async function saveRsvp(
   };
 
   let row: RsvpResponseRow;
-  if (existing[0]) {
+  if (existingId) {
     const [updated] = await db
       .update(rsvpResponse)
       .set({ ...values, createdAt: new Date() })
-      .where(eq(rsvpResponse.id, existing[0].id))
+      .where(eq(rsvpResponse.id, existingId))
       .returning();
     row = updated!;
   } else {
     const [inserted] = await db.insert(rsvpResponse).values(values).returning();
     row = inserted!;
   }
-  return { response: toResponse(row, p.name), parcours: p };
+  // Email : colonne additive, écrite en SQL brut tolérant (voir loadEmailMap).
+  if (email) {
+    try {
+      await db.execute(sql`update rsvp_response set email = ${email} where id = ${row.id}`);
+    } catch {
+      // Colonne `email` absente → ignoré (le reste de la réponse est bien enregistré).
+    }
+  }
+  return { response: toResponse(row, p.name, email), parcours: p };
+}
+
+/**
+ * Retrouve la réponse d'un invité par son email (pour pré-remplir la modification).
+ * Résilient : renvoie `null` si la colonne `email` n'existe pas encore.
+ */
+export async function getGuestResponse(
+  parcoursId: string,
+  email: string,
+): Promise<RsvpPrefill | null> {
+  const emailLc = email.trim().toLowerCase();
+  if (!emailLc) return null;
+  if (!db) {
+    const r = demoStore().responses.find(
+      (x) => x.parcoursId === parcoursId && x.email?.trim().toLowerCase() === emailLc,
+    );
+    if (!r) return null;
+    return {
+      guestName: r.guestName,
+      email: r.email ?? '',
+      attending: r.attending,
+      headcount: r.headcount,
+      perMoment: { ...r.perMoment },
+      dietary: r.dietary ?? '',
+      message: r.message ?? '',
+    };
+  }
+  try {
+    const rows = (await db.execute(
+      sql`select guest_name, email, attending, headcount, per_moment, dietary, message
+          from rsvp_response
+          where parcours_id = ${parcoursId} and lower(email) = lower(${email})
+          order by created_at desc limit 1`,
+    )) as unknown as Array<{
+      guest_name: string;
+      email: string | null;
+      attending: Attending;
+      headcount: number;
+      per_moment: Record<string, boolean> | null;
+      dietary: string | null;
+      message: string | null;
+    }>;
+    const r = rows[0];
+    if (!r) return null;
+    return {
+      guestName: r.guest_name,
+      email: r.email ?? '',
+      attending: r.attending,
+      headcount: r.headcount,
+      perMoment: r.per_moment ?? {},
+      dietary: r.dietary ?? '',
+      message: r.message ?? '',
+    };
+  } catch {
+    return null;
+  }
 }
 
 /** Édition d'une réponse RSVP par le couple (dashboard). */

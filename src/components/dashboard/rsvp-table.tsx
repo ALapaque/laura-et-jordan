@@ -178,6 +178,7 @@ export function RsvpTable({
               {open && !editing && (
                 <div className="grid gap-2 bg-bg/50 px-[18px] py-3.5 font-body text-[14px] text-muted">
                   <DetailRow label="Date de réponse" value={shortDate(r.createdAt)} />
+                  {r.email && <DetailRow label="Email" value={r.email} />}
                   {attended.length > 0 && <DetailRow label="Moments" value={attended.join(' · ')} />}
                   {r.dietary && <DetailRow label="Régime / allergies" value={r.dietary} />}
                   {r.message && <DetailRow label="Petit mot" value={`« ${r.message} »`} />}
