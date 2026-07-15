@@ -27,8 +27,9 @@ export async function uploadMedia(
     console.error('[storage] upload échoué :', error.message);
     return null;
   }
-  const url = await getSignedUrl(path);
-  return url ? { path, url } : null;
+  // Bucket public → URL stable non expirante (recommandé pour médias du mariage).
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+  return { path, url: data.publicUrl };
 }
 
 /** URL signée (bucket privé). Durée par défaut : 1 an. */

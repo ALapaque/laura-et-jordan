@@ -11,7 +11,7 @@ export const demoWedding: Wedding = {
   coupleNames: 'Laura & Jordan',
   eventDate: '2027-07-31T14:00:00.000Z', // 31 juillet 2027 (charte / faire-part)
   venue: null,
-  musicUrl: null,
+  musicUrl: '/demo-music.wav', // boucle d'ambiance de démo (remplaçable dans le dashboard)
   welcomeText: "C'est entourés de ceux qui comptent que nous voulons dire oui.",
   rsvpDeadline: null,
   locales: ['fr'],
