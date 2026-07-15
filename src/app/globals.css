@@ -172,3 +172,25 @@ a:hover {
     transform: none !important;
   }
 }
+
+/* ── Intro vidéo ───────────────────────────────────────────────
+   Masque les contrôles natifs de la balise <video> — en particulier
+   le gros bouton « play » glossy qu'iOS Safari dessine tout seul par
+   dessus une vidéo pas encore lancée (peu élégant). On gère le
+   lancement avec notre propre overlay + affiche la 1re frame via `poster`.
+   ───────────────────────────────────────────────────────────── */
+.jl-intro-video::-webkit-media-controls,
+.jl-intro-video::-webkit-media-controls-enclosure,
+.jl-intro-video::-webkit-media-controls-panel,
+.jl-intro-video::-webkit-media-controls-start-playback-button,
+.jl-intro-video::-webkit-media-controls-play-button,
+.jl-intro-video::-webkit-media-controls-overlay-play-button {
+  display: none !important;
+  -webkit-appearance: none;
+  appearance: none;
+  opacity: 0 !important;
+}
+.jl-intro-video {
+  -webkit-tap-highlight-color: transparent;
+  object-fit: cover;
+}
