@@ -12,6 +12,22 @@ const globalForDb = globalThis as unknown as {
   _pgClient?: ReturnType<typeof postgres>;
 };
 
+/**
+ * Supabase (pooler ou connexion directe) impose le SSL. Sans ça, postgres.js
+ * échoue avec « connection is insecure (try using sslmode=require) ».
+ * On active `ssl:'require'` pour un hôte Supabase ; on laisse tel quel en local.
+ */
+function sslMode(url: string): 'require' | undefined {
+  try {
+    if (/sslmode=require/i.test(url)) return 'require';
+    const host = new URL(url).hostname;
+    if (host.includes('supabase') || host.includes('pooler')) return 'require';
+  } catch {
+    // URL malformée — laisser postgres.js gérer
+  }
+  return undefined;
+}
+
 function createDb() {
   if (!databaseUrl) return null;
   const client =
@@ -19,6 +35,7 @@ function createDb() {
     postgres(databaseUrl, {
       // `prepare:false` requis pour le pooler Supabase (mode transaction).
       prepare: false,
+      ssl: sslMode(databaseUrl),
       max: 5,
       idle_timeout: 20,
     });

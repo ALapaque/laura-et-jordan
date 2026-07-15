@@ -16,7 +16,9 @@ async function main() {
     console.error('✗ DATABASE_URL requis pour le seed. Renseignez-le dans .env.local');
     process.exit(1);
   }
-  const client = postgres(url, { prepare: false, max: 1 });
+  const ssl =
+    /sslmode=require/i.test(url) || /supabase|pooler/i.test(url) ? ('require' as const) : undefined;
+  const client = postgres(url, { prepare: false, ssl, max: 1 });
   const db = drizzle(client, { schema });
 
   console.log('› Nettoyage des tables applicatives…');
