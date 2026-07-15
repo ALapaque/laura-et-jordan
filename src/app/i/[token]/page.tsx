@@ -7,7 +7,7 @@ import { MotifBackground } from '@/components/ui/motif-background';
 import { ScallopedPanel } from '@/components/ui/scalloped-panel';
 import { daysUntil, heroDate, momentLocation, momentTime } from '@/lib/format';
 import { getDetailCards, getInvitationByToken } from '@/lib/queries';
-import type { DetailCard, Moment, Wedding } from '@/lib/types';
+import type { DetailCard, Moment, MomentAsset, Wedding } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -210,14 +210,47 @@ function ProgrammeSection({ moments }: { moments: Moment[] }) {
                   {m.description}
                 </p>
               )}
-              <div className="mt-3 h-[132px] overflow-hidden rounded-[10px]">
-                <ImageSlot src={m.mediaUrl} label="Lieu" alt={m.title} />
-              </div>
+              <MomentGallery assets={m.media} title={m.title} />
             </div>
           </div>
         ))}
       </div>
     </section>
+  );
+}
+
+/** Galerie d'un moment : placeholder si vide, grande photo si une seule, grille sinon. */
+function MomentGallery({ assets, title }: { assets: MomentAsset[]; title: string }) {
+  if (assets.length === 0) {
+    return (
+      <div className="mt-3 h-[132px] overflow-hidden rounded-[10px]">
+        <ImageSlot label="Photo" />
+      </div>
+    );
+  }
+  if (assets.length === 1) {
+    return (
+      <div className="mt-3 h-[150px] overflow-hidden rounded-[10px]">
+        <ImageSlot src={assets[0]!.url} alt={title} />
+      </div>
+    );
+  }
+  const odd = assets.length % 2 === 1;
+  const [first, ...rest] = assets;
+  const gridItems = odd ? rest : assets;
+  return (
+    <div className="mt-3 grid grid-cols-2 gap-2">
+      {odd && first && (
+        <div className="col-span-2 h-[150px] overflow-hidden rounded-[10px]">
+          <ImageSlot src={first.url} alt={title} />
+        </div>
+      )}
+      {gridItems.map((a) => (
+        <div key={a.id} className="h-[110px] overflow-hidden rounded-[10px]">
+          <ImageSlot src={a.url} alt={title} />
+        </div>
+      ))}
+    </div>
   );
 }
 

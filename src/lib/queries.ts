@@ -1,7 +1,7 @@
 import 'server-only';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { detailCard, media, moment, parcours, rsvpResponse, wedding } from '@/db/schema';
+import { detailCard, media, moment, momentMedia, parcours, rsvpResponse, wedding } from '@/db/schema';
 import { demoDetailCards, demoStore, nextDemoId } from '@/db/demo-data';
 import type {
   DetailCardRow,
@@ -16,6 +16,7 @@ import {
   type Attending,
   type DetailCard,
   type Moment,
+  type MomentAsset,
   type Parcours,
   type RsvpFields,
   type RsvpResponse,
@@ -56,7 +57,7 @@ function toWedding(row: WeddingRow, coverUrl: string | null, heroVideoUrl: strin
   };
 }
 
-function toMoment(row: MomentRow, mediaUrl: string | null): Moment {
+function toMoment(row: MomentRow, media: MomentAsset[]): Moment {
   return {
     id: row.id,
     title: row.title,
@@ -66,7 +67,7 @@ function toMoment(row: MomentRow, mediaUrl: string | null): Moment {
     dressCode: row.dressCode,
     mapLat: row.mapLat,
     mapLng: row.mapLng,
-    mediaUrl,
+    media,
     sortOrder: row.sortOrder,
   };
 }
@@ -118,13 +119,48 @@ export async function getWedding(): Promise<Wedding> {
 }
 
 export async function getMoments(): Promise<Moment[]> {
-  if (!db) return demoStore().moments.map((m) => ({ ...m })).sort(bySortOrder);
+  if (!db) {
+    return demoStore()
+      .moments.map((m) => ({ ...m, media: m.media.map((a) => ({ ...a })) }))
+      .sort(bySortOrder);
+  }
   const rows = await db
-    .select({ moment, mediaUrl: media.url })
+    .select({ moment, coverUrl: media.url })
     .from(moment)
     .leftJoin(media, eq(moment.mediaId, media.id))
     .orderBy(asc(moment.sortOrder));
-  return rows.map((r) => toMoment(r.moment, r.mediaUrl));
+
+  // Galeries multi-photos (table `moment_media`). Résilient : si la table n'existe
+  // pas encore (script SQL non lancé), on retombe sur la photo unique historique
+  // (`moment.media_id`) pour ne rien perdre à l'affichage.
+  const galleries = new Map<string, MomentAsset[]>();
+  try {
+    const assets = await db
+      .select({
+        id: momentMedia.id,
+        momentId: momentMedia.momentId,
+        url: media.url,
+        sortOrder: momentMedia.sortOrder,
+      })
+      .from(momentMedia)
+      .innerJoin(media, eq(momentMedia.mediaId, media.id))
+      .orderBy(asc(momentMedia.sortOrder));
+    for (const a of assets) {
+      if (!a.url) continue;
+      const list = galleries.get(a.momentId) ?? [];
+      list.push({ id: a.id, url: a.url, sortOrder: a.sortOrder });
+      galleries.set(a.momentId, list);
+    }
+    return rows.map((r) => toMoment(r.moment, galleries.get(r.moment.id) ?? []));
+  } catch {
+    // Table `moment_media` absente → repli sur la photo unique existante.
+    return rows.map((r) =>
+      toMoment(
+        r.moment,
+        r.coverUrl ? [{ id: `${r.moment.id}-cover`, url: r.coverUrl, sortOrder: 0 }] : [],
+      ),
+    );
+  }
 }
 
 export async function getParcoursList(): Promise<Parcours[]> {
@@ -405,7 +441,7 @@ export async function createMoment(input: { title: string }): Promise<Moment> {
       dressCode: null,
       mapLat: null,
       mapLng: null,
-      mediaUrl: null,
+      media: [],
       sortOrder: store.moments.length,
     };
     store.moments.push(m);
@@ -420,7 +456,7 @@ export async function createMoment(input: { title: string }): Promise<Moment> {
     .insert(moment)
     .values({ weddingId: w.id, title: input.title, sortOrder: count })
     .returning();
-  return toMoment(row!, null);
+  return toMoment(row!, []);
 }
 
 export async function updateMoment(
@@ -483,22 +519,64 @@ async function insertImageMedia(storagePath: string, url: string): Promise<strin
   return row?.id ?? null;
 }
 
-/** Associe (ou retire) une photo à un moment. */
-export async function setMomentImage(
+/** Ajoute une photo à la galerie d'un moment ; renvoie l'asset créé. */
+export async function addMomentAsset(
   momentId: string,
-  input: { url: string; storagePath: string } | null,
-): Promise<void> {
+  input: { url: string; storagePath: string },
+): Promise<MomentAsset> {
   if (!db) {
     const m = demoStore().moments.find((x) => x.id === momentId);
-    if (m) m.mediaUrl = input?.url ?? null;
-    return;
-  }
-  if (!input) {
-    await db.update(moment).set({ mediaId: null }).where(eq(moment.id, momentId));
-    return;
+    const asset: MomentAsset = {
+      id: nextDemoId('ma'),
+      url: input.url,
+      sortOrder: m ? m.media.length : 0,
+    };
+    m?.media.push(asset);
+    return asset;
   }
   const mediaId = await insertImageMedia(input.storagePath, input.url);
-  await db.update(moment).set({ mediaId }).where(eq(moment.id, momentId));
+  if (!mediaId) throw new Error('Média non créé');
+  const [{ count } = { count: 0 }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(momentMedia)
+    .where(eq(momentMedia.momentId, momentId));
+  const [row] = await db
+    .insert(momentMedia)
+    .values({ momentId, mediaId, sortOrder: count })
+    .returning();
+  return { id: row!.id, url: input.url, sortOrder: row!.sortOrder };
+}
+
+/** Retire une photo de la galerie (id = ligne moment_media). */
+export async function removeMomentAsset(assetId: string): Promise<void> {
+  if (!db) {
+    for (const m of demoStore().moments) {
+      m.media = m.media.filter((a) => a.id !== assetId);
+    }
+    return;
+  }
+  await db.delete(momentMedia).where(eq(momentMedia.id, assetId));
+}
+
+/** Réordonne la galerie d'un moment (liste ordonnée d'ids moment_media). */
+export async function reorderMomentAssets(momentId: string, orderedIds: string[]): Promise<void> {
+  if (!db) {
+    const m = demoStore().moments.find((x) => x.id === momentId);
+    if (m) {
+      const index = new Map(orderedIds.map((id, i) => [id, i]));
+      m.media.forEach((a) => {
+        if (index.has(a.id)) a.sortOrder = index.get(a.id)!;
+      });
+      m.media.sort((a, b) => a.sortOrder - b.sortOrder);
+    }
+    return;
+  }
+  const database = db;
+  await Promise.all(
+    orderedIds.map((id, i) =>
+      database.update(momentMedia).set({ sortOrder: i }).where(eq(momentMedia.id, id)),
+    ),
+  );
 }
 
 // ── Cartes « détails pratiques » ─────────────────────────────────

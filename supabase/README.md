@@ -9,9 +9,11 @@ Dans Supabase → **SQL Editor** → **New query**, colle et exécute dans l'ord
 1. [`01_schema.sql`](./01_schema.sql) — crée les tables, la sécurité (RLS) et le bucket `media`. **Obligatoire.**
 2. [`02_seed.sql`](./02_seed.sql) — insère des données de démo + 3 liens de test. **Facultatif** (à ne lancer qu'une fois).
 3. [`03_detail_cards.sql`](./03_detail_cards.sql) — active la gestion des cartes « Détails pratiques » (texte + photo) depuis le dashboard. **Recommandé** (idempotent).
+4. [`04_moment_media.sql`](./04_moment_media.sql) — active les **galeries multi-photos** par moment (Dashboard → Moments). **Recommandé** (idempotent).
 
 > Sans le seed, l'app démarre vide : tu crées tes moments et tes parcours directement depuis le **dashboard**.
 > Sans `03_detail_cards.sql`, l'invitation affiche des cartes « Détails pratiques » par défaut (texte seul, non éditables) — rien ne casse.
+> Sans `04_moment_media.sql`, chaque moment garde sa photo unique existante ; l'ajout de plusieurs photos est désactivé — rien ne casse.
 
 ## 2. Compte des mariés (Authentication)
 

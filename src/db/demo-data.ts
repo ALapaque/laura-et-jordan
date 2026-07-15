@@ -38,7 +38,10 @@ export const demoMoments: Moment[] = [
     dressCode: null,
     mapLat: null,
     mapLng: null,
-    mediaUrl: null,
+    media: [
+      { id: 'cm-1', url: '/motif.jpg', sortOrder: 0 },
+      { id: 'cm-2', url: '/motif.jpg', sortOrder: 1 },
+    ],
     sortOrder: 0,
   },
   {
@@ -50,7 +53,7 @@ export const demoMoments: Moment[] = [
     dressCode: null,
     mapLat: null,
     mapLng: null,
-    mediaUrl: null,
+    media: [],
     sortOrder: 1,
   },
   {
@@ -62,7 +65,11 @@ export const demoMoments: Moment[] = [
     dressCode: null,
     mapLat: null,
     mapLng: null,
-    mediaUrl: null,
+    media: [
+      { id: 'dm-1', url: '/motif.jpg', sortOrder: 0 },
+      { id: 'dm-2', url: '/motif.jpg', sortOrder: 1 },
+      { id: 'dm-3', url: '/motif.jpg', sortOrder: 2 },
+    ],
     sortOrder: 2,
   },
   {
@@ -74,7 +81,7 @@ export const demoMoments: Moment[] = [
     dressCode: null,
     mapLat: null,
     mapLng: null,
-    mediaUrl: null,
+    media: [],
     sortOrder: 3,
   },
 ];

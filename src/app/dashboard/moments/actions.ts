@@ -2,14 +2,16 @@
 
 import { revalidatePath } from 'next/cache';
 import {
+  addMomentAsset,
   createMoment,
   deleteMoment,
+  removeMomentAsset,
+  reorderMomentAssets,
   reorderMoments,
-  setMomentImage,
   updateMoment,
 } from '@/lib/queries';
 import { isStorageConfigured, uploadMedia } from '@/lib/storage';
-import type { Moment } from '@/lib/types';
+import type { Moment, MomentAsset } from '@/lib/types';
 
 function revalidateAll() {
   revalidatePath('/dashboard/moments');
@@ -47,11 +49,12 @@ export async function reorderMomentsAction(ids: string[]) {
   revalidateAll();
 }
 
-/** Téléverse une photo (bucket public « media ») et l'associe au moment. */
-export async function uploadMomentImageAction(
+// ── Galerie de photos d'un moment ────────────────────────────────
+/** Téléverse une photo (bucket public « media ») et l'ajoute à la galerie du moment. */
+export async function addMomentPhotoAction(
   momentId: string,
   formData: FormData,
-): Promise<{ url?: string; error?: string }> {
+): Promise<{ asset?: MomentAsset; error?: string }> {
   const file = formData.get('file');
   if (!(file instanceof File) || file.size === 0) return { error: 'Aucun fichier sélectionné.' };
   if (!file.type.startsWith('image/'))
@@ -67,12 +70,23 @@ export async function uploadMomentImageAction(
     file.type,
   );
   if (!result) return { error: 'Échec du téléversement.' };
-  await setMomentImage(momentId, { url: result.url, storagePath: result.path });
-  revalidateAll();
-  return { url: result.url };
+  try {
+    const asset = await addMomentAsset(momentId, { url: result.url, storagePath: result.path });
+    revalidateAll();
+    return { asset };
+  } catch {
+    return {
+      error: 'Galeries non activées — lancez le script 04_moment_media.sql dans Supabase.',
+    };
+  }
 }
 
-export async function removeMomentImageAction(momentId: string) {
-  await setMomentImage(momentId, null);
+export async function removeMomentPhotoAction(assetId: string) {
+  await removeMomentAsset(assetId);
+  revalidateAll();
+}
+
+export async function reorderMomentPhotosAction(momentId: string, orderedIds: string[]) {
+  await reorderMomentAssets(momentId, orderedIds);
   revalidateAll();
 }

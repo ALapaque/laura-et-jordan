@@ -19,16 +19,16 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
+  addMomentPhotoAction,
   createMomentAction,
   deleteMomentAction,
-  removeMomentImageAction,
+  removeMomentPhotoAction,
+  reorderMomentPhotosAction,
   reorderMomentsAction,
   updateMomentAction,
-  uploadMomentImageAction,
 } from '@/app/dashboard/moments/actions';
-import { ImageSlot } from '@/components/ui/image-slot';
 import { momentLocation, momentTime } from '@/lib/format';
-import type { Moment } from '@/lib/types';
+import type { Moment, MomentAsset } from '@/lib/types';
 
 export function MomentsEditor({ initial }: { initial: Moment[] }) {
   const [items, setItems] = useState<Moment[]>(initial);
@@ -79,8 +79,8 @@ export function MomentsEditor({ initial }: { initial: Moment[] }) {
     startTransition(() => deleteMomentAction(id));
   }
 
-  function onMomentImage(id: string, mediaUrl: string | null) {
-    setItems((list) => list.map((m) => (m.id === id ? { ...m, mediaUrl } : m)));
+  function setMomentMedia(id: string, media: MomentAsset[]) {
+    setItems((list) => list.map((m) => (m.id === id ? { ...m, media } : m)));
   }
 
   return (
@@ -109,7 +109,7 @@ export function MomentsEditor({ initial }: { initial: Moment[] }) {
                 onCancel={() => setEditingId(null)}
                 onSave={(patch) => saveMoment(m.id, patch)}
                 onDelete={() => removeMoment(m.id)}
-                onImage={(url) => onMomentImage(m.id, url)}
+                onMedia={(media) => setMomentMedia(m.id, media)}
               />
             ))}
             {items.length === 0 && (
@@ -131,7 +131,7 @@ function SortableMoment({
   onCancel,
   onSave,
   onDelete,
-  onImage,
+  onMedia,
 }: {
   moment: Moment;
   editing: boolean;
@@ -139,7 +139,7 @@ function SortableMoment({
   onCancel: () => void;
   onSave: (patch: Partial<Moment>) => void;
   onDelete: () => void;
-  onImage: (url: string | null) => void;
+  onMedia: (media: MomentAsset[]) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: moment.id,
@@ -187,7 +187,7 @@ function SortableMoment({
           onCancel={onCancel}
           onSave={onSave}
           onDelete={onDelete}
-          onImage={onImage}
+          onMedia={onMedia}
         />
       )}
     </div>
@@ -199,13 +199,13 @@ function MomentForm({
   onCancel,
   onSave,
   onDelete,
-  onImage,
+  onMedia,
 }: {
   moment: Moment;
   onCancel: () => void;
   onSave: (patch: Partial<Moment>) => void;
   onDelete: () => void;
-  onImage: (url: string | null) => void;
+  onMedia: (media: MomentAsset[]) => void;
 }) {
   const [title, setTitle] = useState(moment.title);
   const [startsAt, setStartsAt] = useState(moment.startsAt ? moment.startsAt.slice(0, 16) : '');
@@ -222,17 +222,31 @@ function MomentForm({
     const form = new FormData();
     form.set('file', file);
     startUpload(async () => {
-      const res = await uploadMomentImageAction(moment.id, form);
+      const res = await addMomentPhotoAction(moment.id, form);
       if (res.error) setImgError(res.error);
-      else if (res.url) onImage(res.url);
+      else if (res.asset) onMedia([...moment.media, res.asset]);
     });
   }
 
-  function removePhoto() {
-    startUpload(async () => {
-      await removeMomentImageAction(moment.id);
-      onImage(null);
-    });
+  function removePhoto(assetId: string) {
+    onMedia(moment.media.filter((a) => a.id !== assetId));
+    startUpload(() => removeMomentPhotoAction(assetId));
+  }
+
+  function movePhoto(index: number, dir: -1 | 1) {
+    const j = index + dir;
+    if (j < 0 || j >= moment.media.length) return;
+    const next = [...moment.media];
+    const tmp = next[index]!;
+    next[index] = next[j]!;
+    next[j] = tmp;
+    onMedia(next);
+    startUpload(() =>
+      reorderMomentPhotosAction(
+        moment.id,
+        next.map((a) => a.id),
+      ),
+    );
   }
 
   return (
@@ -241,41 +255,65 @@ function MomentForm({
         <input value={title} onChange={(e) => setTitle(e.target.value)} className={fieldClass} />
       </Labeled>
 
-      <Labeled label="Photo">
-        <div className="flex items-center gap-3">
-          <div className="h-[64px] w-[92px] flex-none overflow-hidden rounded-lg border border-line">
-            <ImageSlot src={moment.mediaUrl} label="Photo" alt={moment.title} />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <div className="flex flex-wrap items-center gap-2.5">
+      <Labeled label="Photos">
+        <div className="flex flex-wrap items-center gap-2">
+          {moment.media.map((a, i) => (
+            <div
+              key={a.id}
+              className="relative h-[64px] w-[92px] flex-none overflow-hidden rounded-lg border border-line"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={a.url} alt="" className="h-full w-full object-cover" />
               <button
                 type="button"
-                onClick={() => fileRef.current?.click()}
-                disabled={uploading}
-                className="rounded-lg border border-line bg-bg px-3.5 py-1.5 font-body text-[12px] uppercase tracking-[0.1em] text-olive transition-colors hover:bg-panel disabled:opacity-50"
+                onClick={() => removePhoto(a.id)}
+                title="Retirer"
+                aria-label="Retirer la photo"
+                className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-ink/70 text-[13px] leading-none text-panel transition-colors hover:bg-ink"
               >
-                {uploading ? 'Téléversement…' : moment.mediaUrl ? 'Remplacer' : 'Téléverser'}
+                ×
               </button>
-              {moment.mediaUrl && !uploading && (
+              <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-ink/45 px-1.5 py-0.5">
                 <button
                   type="button"
-                  onClick={removePhoto}
-                  className="font-body text-[12px] text-muted transition-colors hover:text-[#9a3b2e]"
+                  onClick={() => movePhoto(i, -1)}
+                  disabled={i === 0}
+                  aria-label="Déplacer vers la gauche"
+                  className="text-[14px] leading-none text-panel disabled:opacity-30"
                 >
-                  Retirer
+                  ‹
                 </button>
-              )}
+                <button
+                  type="button"
+                  onClick={() => movePhoto(i, 1)}
+                  disabled={i === moment.media.length - 1}
+                  aria-label="Déplacer vers la droite"
+                  className="text-[14px] leading-none text-panel disabled:opacity-30"
+                >
+                  ›
+                </button>
+              </div>
             </div>
-            {imgError && <span className="font-body text-[12px] text-[#9a3b2e]">{imgError}</span>}
-          </div>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => onPhoto(e.target.files?.[0])}
-          />
+          ))}
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            className="flex h-[64px] w-[92px] flex-none items-center justify-center rounded-lg border border-dashed border-line bg-bg font-body text-[11px] uppercase tracking-[0.08em] text-olive transition-colors hover:bg-panel disabled:opacity-50"
+          >
+            {uploading ? '…' : '+ Photo'}
+          </button>
         </div>
+        {imgError && (
+          <span className="mt-1.5 block font-body text-[12px] text-[#9a3b2e]">{imgError}</span>
+        )}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => onPhoto(e.target.files?.[0])}
+        />
       </Labeled>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Labeled label="Date & heure">
