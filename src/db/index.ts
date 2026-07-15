@@ -35,6 +35,14 @@ function createDb() {
     postgres(databaseUrl, {
       // `prepare:false` requis pour le pooler Supabase (mode transaction).
       prepare: false,
+      // `fetch_types:false` : sur le pooler Supabase, la requête interne que
+      // postgres.js émet pour découvrir les types de tableaux se désynchronise
+      // du pipeline (surtout mêlée à des requêtes concurrentes) et renvoie des
+      // colonnes `undefined` — d'où le crash « Cannot read properties of
+      // undefined (reading 'map') » au mapping des colonnes tableau (ex.
+      // `visible_moment_ids`). En le désactivant, les tableaux reviennent en
+      // texte et sont parsés de façon fiable par Drizzle.
+      fetch_types: false,
       ssl: sslMode(databaseUrl),
       max: 5,
       idle_timeout: 20,
