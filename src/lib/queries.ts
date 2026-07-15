@@ -24,15 +24,28 @@ import {
 export const isDemoMode = db === null;
 
 // ── Mappers rows → vues ──────────────────────────────────────────
+/**
+ * Convertit une valeur date (Date, string, number…) en ISO 8601, ou `null`.
+ * Le driver Postgres peut renvoyer un `Date` invalide (NaN) selon la valeur
+ * stockée ; un `?` sur la vérité ne l'attrape pas (un `Date` invalide reste
+ * truthy) et `.toISOString()` lève alors `RangeError: Invalid time value`.
+ * On teste donc explicitement `getTime()` avant de sérialiser.
+ */
+function toIso(value: unknown): string | null {
+  if (value == null) return null;
+  const d = value instanceof Date ? value : new Date(value as string | number);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 function toWedding(row: WeddingRow, coverUrl: string | null, heroVideoUrl: string | null): Wedding {
   return {
     id: row.id,
     coupleNames: row.coupleNames,
-    eventDate: row.eventDate ? row.eventDate.toISOString() : null,
+    eventDate: toIso(row.eventDate),
     venue: row.venue,
     musicUrl: row.musicUrl,
     welcomeText: row.welcomeText,
-    rsvpDeadline: row.rsvpDeadline ? row.rsvpDeadline.toISOString() : null,
+    rsvpDeadline: toIso(row.rsvpDeadline),
     locales: row.locales,
     notifyEmails: row.notifyEmails,
     notifyEnabled: row.notifyEnabled,
@@ -46,7 +59,7 @@ function toMoment(row: MomentRow, mediaUrl: string | null): Moment {
   return {
     id: row.id,
     title: row.title,
-    startsAt: row.startsAt ? row.startsAt.toISOString() : null,
+    startsAt: toIso(row.startsAt),
     location: row.location,
     description: row.description,
     dressCode: row.dressCode,
@@ -65,7 +78,7 @@ function toParcours(row: ParcoursRow): Parcours {
     visibleMomentIds: row.visibleMomentIds,
     rsvpFields: row.rsvpFields ?? { ...DEFAULT_RSVP_FIELDS },
     introOverride: row.introOverride,
-    createdAt: row.createdAt.toISOString(),
+    createdAt: toIso(row.createdAt) ?? new Date().toISOString(),
   };
 }
 
@@ -81,7 +94,7 @@ function toResponse(row: RsvpResponseRow, parcoursName: string): RsvpResponse {
     dietary: row.dietary,
     message: row.message,
     locale: row.locale,
-    createdAt: row.createdAt.toISOString(),
+    createdAt: toIso(row.createdAt) ?? new Date().toISOString(),
   };
 }
 
