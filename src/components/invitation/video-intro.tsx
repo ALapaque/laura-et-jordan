@@ -16,10 +16,12 @@ import { useRef, useState } from 'react';
 export function VideoIntro({
   webmSrc,
   mp4Src,
+  posterSrc,
   onDone,
 }: {
   webmSrc?: string;
   mp4Src: string;
+  posterSrc?: string;
   onDone: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -65,30 +67,51 @@ export function VideoIntro({
       <video
         ref={videoRef}
         playsInline
-        preload="metadata"
+        preload="auto"
+        poster={posterSrc}
+        width={640}
+        height={360}
         onEnded={finish}
         onError={finish}
-        className="h-[100dvh] w-auto max-w-none"
+        className="jl-intro-video h-[100dvh] w-auto max-w-none"
       >
         {webmSrc && <source src={webmSrc} type="video/webm" />}
         <source src={mp4Src} type="video/mp4" />
       </video>
 
-      {/* Écran de lancement (avant le clic) */}
+      {/* Écran de lancement (avant le clic) — la 1re image de la vidéo
+          (l'enveloppe scellée) reste visible ; le texte vit sur un dégradé
+          sombre en bas pour rester lisible. Tap n'importe où = on ouvre. */}
       {!started && (
         <button
           onClick={start}
           aria-label="Ouvrir l'invitation"
-          className="group absolute inset-0 z-[2] flex flex-col items-center justify-center gap-5 bg-ink/55 px-6 backdrop-blur-[1px]"
-          style={{ animation: 'jlFadeIn .5s ease both' }}
+          className="group absolute inset-0 z-[2] flex flex-col items-center justify-end gap-4 px-6 pb-[14vh]"
+          style={{ animation: 'jlFadeIn .6s ease both' }}
         >
-          <span className="font-display text-[clamp(34px,9vw,52px)] leading-none text-panel">
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                'linear-gradient(to bottom, rgba(64,57,42,0.34) 0%, rgba(64,57,42,0.04) 24%, rgba(64,57,42,0.10) 46%, rgba(64,57,42,0.78) 90%, rgba(64,57,42,0.92) 100%)',
+            }}
+          />
+          <span
+            className="relative font-display leading-none text-panel"
+            style={{ fontSize: 'clamp(30px, 8vw, 48px)', textShadow: '0 2px 16px rgba(0,0,0,0.55)' }}
+          >
             Laura <span className="font-accent text-[0.6em] text-gold">&amp;</span> Jordan
           </span>
-          <span className="flex h-[76px] w-[76px] items-center justify-center rounded-full border border-panel/50 bg-panel/10 pl-1.5 text-[26px] text-panel transition-colors group-hover:bg-panel/20">
-            ▶
+          <span className="relative flex h-16 w-16 items-center justify-center rounded-full border border-gold/80 bg-ink/25 backdrop-blur-sm transition group-hover:bg-ink/45 group-active:scale-95">
+            <svg viewBox="0 0 24 24" aria-hidden className="ml-0.5 h-6 w-6 fill-gold">
+              <path d="M8 5v14l11-7z" />
+            </svg>
           </span>
-          <span className="font-body text-[12px] uppercase tracking-[0.24em] text-panel/85">
+          <span
+            className="relative font-body text-[12px] uppercase tracking-[0.26em] text-panel/90"
+            style={{ textShadow: '0 1px 10px rgba(0,0,0,0.6)' }}
+          >
             Ouvrir l'invitation
           </span>
         </button>
@@ -97,7 +120,7 @@ export function VideoIntro({
       {/* « Passer » — toujours disponible, pour ne jamais rester bloqué */}
       <button
         onClick={finish}
-        className="absolute bottom-6 right-6 z-[3] rounded-full border border-panel/40 bg-ink/40 px-5 py-2.5 font-body text-[12px] uppercase tracking-[0.14em] text-panel/90 backdrop-blur transition-colors hover:bg-ink/70"
+        className="absolute right-5 top-5 z-[3] rounded-full border border-panel/40 bg-ink/45 px-5 py-2 font-body text-[12px] uppercase tracking-[0.14em] text-panel/90 backdrop-blur transition-colors hover:bg-ink/70"
       >
         Passer
       </button>
