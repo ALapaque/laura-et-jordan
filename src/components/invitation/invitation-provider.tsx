@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Lenis from 'lenis';
-import { EnvelopeIntro, type IntroStage } from './envelope-intro';
+import { VideoIntro } from './video-intro';
 
 const INTRO_SEEN_KEY = 'jl_intro_seen';
+const INTRO_VIDEO_SRC = process.env.NEXT_PUBLIC_INTRO_VIDEO || '/intro.mp4';
 
 export function InvitationProvider({
   children,
@@ -13,7 +14,7 @@ export function InvitationProvider({
   children: React.ReactNode;
   preview?: boolean;
 }) {
-  const [stage, setStage] = useState<IntroStage>('sealed');
+  const [stage, setStage] = useState<'intro' | 'done'>('intro');
   const [reducedMotion, setReducedMotion] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [atRsvp, setAtRsvp] = useState(false);
@@ -116,14 +117,7 @@ export function InvitationProvider({
   }, [mounted]);
 
   // ── Actions intro ──────────────────────────────────────────────
-  const openEnvelope = useCallback(() => {
-    setStage((s) => (s === 'sealed' ? 'opening' : s));
-  }, []);
   const onIntroDone = useCallback(() => {
-    setStage('done');
-    saveSeen();
-  }, [saveSeen]);
-  const skipIntro = useCallback(() => {
     setStage('done');
     saveSeen();
   }, [saveSeen]);
@@ -143,15 +137,7 @@ export function InvitationProvider({
 
   return (
     <>
-      {mounted && stage !== 'done' && (
-        <EnvelopeIntro
-          stage={stage}
-          onOpen={openEnvelope}
-          onDone={onIntroDone}
-          onSkip={skipIntro}
-          videoSrc={process.env.NEXT_PUBLIC_ENVELOPE_VIDEO || undefined}
-        />
-      )}
+      {mounted && stage !== 'done' && <VideoIntro src={INTRO_VIDEO_SRC} onDone={onIntroDone} />}
 
       {children}
 
