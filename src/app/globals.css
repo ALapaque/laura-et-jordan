@@ -102,6 +102,27 @@ a:hover {
     filter: brightness(1.12);
   }
 }
+/* Reflet or qui balaie le cachet */
+@keyframes jlSheen {
+  0%,
+  18% {
+    transform: translateX(-130%) skewX(-18deg);
+  }
+  58%,
+  100% {
+    transform: translateX(360%) skewX(-18deg);
+  }
+}
+/* Flottement doux de l'enveloppe scellée */
+@keyframes jlBob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
 
 /* ── Scroll reveal (progressive enhancement) ──────────────── */
 [data-rev] {
