@@ -5,7 +5,8 @@ import Lenis from 'lenis';
 import { VideoIntro } from './video-intro';
 
 const INTRO_SEEN_KEY = 'jl_intro_seen';
-const INTRO_VIDEO_SRC = process.env.NEXT_PUBLIC_INTRO_VIDEO || '/intro.mp4';
+const INTRO_VIDEO_MP4 = process.env.NEXT_PUBLIC_INTRO_VIDEO || '/intro.mp4';
+const INTRO_VIDEO_WEBM = process.env.NEXT_PUBLIC_INTRO_VIDEO_WEBM || '/intro.webm';
 
 export function InvitationProvider({
   children,
@@ -137,7 +138,9 @@ export function InvitationProvider({
 
   return (
     <>
-      {mounted && stage !== 'done' && <VideoIntro src={INTRO_VIDEO_SRC} onDone={onIntroDone} />}
+      {mounted && stage !== 'done' && (
+        <VideoIntro webmSrc={INTRO_VIDEO_WEBM} mp4Src={INTRO_VIDEO_MP4} onDone={onIntroDone} />
+      )}
 
       {children}
 
