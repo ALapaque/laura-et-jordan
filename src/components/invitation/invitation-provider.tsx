@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Lenis from 'lenis';
 import { VideoIntro } from './video-intro';
 
-const INTRO_SEEN_KEY = 'jl_intro_seen';
 const INTRO_VIDEO_MP4 = process.env.NEXT_PUBLIC_INTRO_VIDEO || '/intro.mp4';
 const INTRO_VIDEO_WEBM = process.env.NEXT_PUBLIC_INTRO_VIDEO_WEBM || '/intro.webm';
 // 1re image de la vidéo (enveloppe + sceau) affichée avant le clic.
@@ -24,32 +23,16 @@ export function InvitationProvider({
 
   const lenisRef = useRef<Lenis | null>(null);
 
-  // Détermine l'état initial (mémoire intro + reduced-motion).
+  // État initial : l'intro se rejoue à CHAQUE chargement (un bouton « Passer »
+  // permet de la sauter). On ne la saute d'emblée que si l'utilisateur a activé
+  // « mouvement réduit » (accessibilité) ou en aperçu dashboard.
   useEffect(() => {
     setMounted(true);
     const reduce =
       typeof window !== 'undefined' &&
       window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     setReducedMotion(!!reduce);
-
-    if (!preview) {
-      try {
-        if (localStorage.getItem(INTRO_SEEN_KEY) === '1' || reduce) setStage('done');
-      } catch {
-        // localStorage indisponible
-      }
-    } else if (reduce) {
-      setStage('done');
-    }
-  }, [preview]);
-
-  const saveSeen = useCallback(() => {
-    if (preview) return;
-    try {
-      localStorage.setItem(INTRO_SEEN_KEY, '1');
-    } catch {
-      // ignore
-    }
+    if (reduce || preview) setStage('done');
   }, [preview]);
 
   const introDone = stage === 'done';
@@ -122,8 +105,7 @@ export function InvitationProvider({
   // ── Actions intro ──────────────────────────────────────────────
   const onIntroDone = useCallback(() => {
     setStage('done');
-    saveSeen();
-  }, [saveSeen]);
+  }, []);
 
   // ── Navigation ─────────────────────────────────────────────────
   const scrollToRsvp = useCallback(() => {
