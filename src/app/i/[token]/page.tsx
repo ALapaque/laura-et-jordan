@@ -5,6 +5,7 @@ import { RsvpForm } from '@/components/invitation/rsvp-form';
 import { ImageSlot } from '@/components/ui/image-slot';
 import { MotifBackground } from '@/components/ui/motif-background';
 import { ScallopedPanel } from '@/components/ui/scalloped-panel';
+import { withDbRetry } from '@/db';
 import { daysUntil, heroDate, momentLocation, momentTime } from '@/lib/format';
 import { getDetailCards, getInvitationByToken } from '@/lib/queries';
 import type { DetailCard, Moment, MomentAsset, Wedding } from '@/lib/types';
@@ -18,7 +19,7 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { token } = await params;
-  const invitation = await getInvitationByToken(token);
+  const invitation = await withDbRetry(() => getInvitationByToken(token));
   if (!invitation) return { title: 'Invitation' };
   const { wedding, parcours } = invitation;
   const description = (parcours.introOverride ?? wedding.welcomeText) || 'Vous êtes invités.';
@@ -36,10 +37,9 @@ export default async function InvitationPage({ params, searchParams }: PageProps
   const preview = sp.preview === '1';
   const locale = sp.lang === 'nl' ? 'nl' : 'fr';
 
-  const [invitation, detailCards] = await Promise.all([
-    getInvitationByToken(token),
-    getDetailCards(),
-  ]);
+  const [invitation, detailCards] = await withDbRetry(() =>
+    Promise.all([getInvitationByToken(token), getDetailCards()]),
+  );
   if (!invitation) notFound();
 
   const { wedding, parcours, moments } = invitation;
