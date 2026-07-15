@@ -25,12 +25,19 @@ export const DEFAULT_RSVP_FIELDS: RsvpFields = {
   maxHeadcount: 12,
 };
 
+export interface DetailCard {
+  id: string;
+  label: string;
+  value: string;
+  mediaUrl: string | null;
+  sortOrder: number;
+}
+
 export interface Wedding {
   id: string;
   coupleNames: string;
   eventDate: string | null; // ISO — null => « [ Date à confirmer ] »
   venue: string | null;
-  musicUrl: string | null;
   welcomeText: string;
   rsvpDeadline: string | null;
   locales: string[];

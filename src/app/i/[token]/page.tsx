@@ -1,14 +1,13 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { HeroControls } from '@/components/invitation/hero-controls';
 import { InvitationProvider } from '@/components/invitation/invitation-provider';
 import { RsvpForm } from '@/components/invitation/rsvp-form';
 import { ImageSlot } from '@/components/ui/image-slot';
 import { MotifBackground } from '@/components/ui/motif-background';
 import { ScallopedPanel } from '@/components/ui/scalloped-panel';
 import { daysUntil, heroDate, momentLocation, momentTime } from '@/lib/format';
-import { getInvitationByToken } from '@/lib/queries';
-import type { Moment, Wedding } from '@/lib/types';
+import { getDetailCards, getInvitationByToken } from '@/lib/queries';
+import type { DetailCard, Moment, Wedding } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,7 +36,10 @@ export default async function InvitationPage({ params, searchParams }: PageProps
   const preview = sp.preview === '1';
   const locale = sp.lang === 'nl' ? 'nl' : 'fr';
 
-  const invitation = await getInvitationByToken(token);
+  const [invitation, detailCards] = await Promise.all([
+    getInvitationByToken(token),
+    getDetailCards(),
+  ]);
   if (!invitation) notFound();
 
   const { wedding, parcours, moments } = invitation;
@@ -45,15 +47,9 @@ export default async function InvitationPage({ params, searchParams }: PageProps
   const countdown = daysUntil(wedding.eventDate);
 
   return (
-    <InvitationProvider musicUrl={wedding.musicUrl} preview={preview}>
+    <InvitationProvider preview={preview}>
       {/* Fond crème uni sur tout le site ; la toile de Jouy ne vit QUE dans le hero. */}
       <main className="relative min-h-screen bg-bg">
-        {preview && (
-          <div className="fixed left-1/2 top-3.5 z-[70] -translate-x-1/2 rounded-full border border-line bg-panel/90 px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-sage backdrop-blur">
-            Aperçu
-          </div>
-        )}
-
         <HeroSection wedding={wedding} countdown={countdown} />
 
         <div className="mx-auto max-w-[540px] pb-16">
@@ -69,7 +65,7 @@ export default async function InvitationPage({ params, searchParams }: PageProps
           </section>
 
           <ProgrammeSection moments={moments} />
-          <DetailsSection wedding={wedding} />
+          <DetailsSection cards={detailCards} />
           <GallerySection />
 
           {/* RSVP — carte crème simple */}
@@ -176,8 +172,6 @@ function HeroSection({ wedding, countdown }: { wedding: Wedding; countdown: numb
         </span>
         <span className="text-[14px] text-olive">⌄</span>
       </div>
-
-      <HeroControls />
     </section>
   );
 }
@@ -227,12 +221,8 @@ function ProgrammeSection({ moments }: { moments: Moment[] }) {
   );
 }
 
-function DetailsSection({ wedding }: { wedding: Wedding }) {
-  const cards = [
-    { label: 'Lieu', value: wedding.venue ?? '[ À confirmer ]', slot: 'Lieu' },
-    { label: 'Dress code', value: 'Élégant · tons naturels bienvenus', slot: 'Tenue' },
-    { label: 'Accès & hébergements', value: 'Informations à venir prochainement', slot: 'Accès' },
-  ];
+function DetailsSection({ cards }: { cards: DetailCard[] }) {
+  if (cards.length === 0) return null;
   return (
     <section
       data-rev="init"
@@ -243,9 +233,9 @@ function DetailsSection({ wedding }: { wedding: Wedding }) {
       </span>
       <div className="mx-auto mt-6 flex max-w-[420px] flex-col gap-4 text-left">
         {cards.map((c) => (
-          <div key={c.label} className="overflow-hidden rounded-[13px] border border-line bg-surface">
+          <div key={c.id} className="overflow-hidden rounded-[13px] border border-line bg-surface">
             <div className="h-[158px]">
-              <ImageSlot label={c.slot} />
+              <ImageSlot src={c.mediaUrl} label={c.label || 'Photo'} alt={c.label} />
             </div>
             <div className="px-[18px] py-[15px]">
               <div className="mb-1 font-body text-[12px] uppercase tracking-[0.16em] text-olive">

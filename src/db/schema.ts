@@ -38,7 +38,6 @@ export const wedding = pgTable('wedding', {
   venue: text('venue'),
   coverMediaId: uuid('cover_media_id').references(() => media.id, { onDelete: 'set null' }),
   heroVideoId: uuid('hero_video_id').references(() => media.id, { onDelete: 'set null' }),
-  musicUrl: text('music_url'),
   welcomeText: text('welcome_text').notNull().default(''),
   rsvpDeadline: timestamp('rsvp_deadline', { withTimezone: true }),
   theme: jsonb('theme').$type<Record<string, unknown>>().notNull().default({}),
@@ -69,6 +68,17 @@ export const moment = pgTable('moment', {
   description: text('description').notNull().default(''),
   mediaId: uuid('media_id').references(() => media.id, { onDelete: 'set null' }),
   dressCode: text('dress_code'),
+  sortOrder: integer('sort_order').notNull().default(0),
+});
+
+export const detailCard = pgTable('detail_card', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  weddingId: uuid('wedding_id')
+    .notNull()
+    .references(() => wedding.id, { onDelete: 'cascade' }),
+  label: text('label').notNull().default(''),
+  value: text('value').notNull().default(''),
+  mediaId: uuid('media_id').references(() => media.id, { onDelete: 'set null' }),
   sortOrder: integer('sort_order').notNull().default(0),
 });
 
@@ -106,6 +116,7 @@ export const rsvpResponse = pgTable('rsvp_response', {
 
 export type WeddingRow = typeof wedding.$inferSelect;
 export type MomentRow = typeof moment.$inferSelect;
+export type DetailCardRow = typeof detailCard.$inferSelect;
 export type ParcoursRow = typeof parcours.$inferSelect;
 export type RsvpResponseRow = typeof rsvpResponse.$inferSelect;
 export type MediaRow = typeof media.$inferSelect;

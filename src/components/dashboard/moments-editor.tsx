@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useRef, useState, useTransition } from 'react';
 import {
   DndContext,
   KeyboardSensor,
@@ -21,9 +21,12 @@ import { CSS } from '@dnd-kit/utilities';
 import {
   createMomentAction,
   deleteMomentAction,
+  removeMomentImageAction,
   reorderMomentsAction,
   updateMomentAction,
+  uploadMomentImageAction,
 } from '@/app/dashboard/moments/actions';
+import { ImageSlot } from '@/components/ui/image-slot';
 import { momentLocation, momentTime } from '@/lib/format';
 import type { Moment } from '@/lib/types';
 
@@ -76,6 +79,10 @@ export function MomentsEditor({ initial }: { initial: Moment[] }) {
     startTransition(() => deleteMomentAction(id));
   }
 
+  function onMomentImage(id: string, mediaUrl: string | null) {
+    setItems((list) => list.map((m) => (m.id === id ? { ...m, mediaUrl } : m)));
+  }
+
   return (
     <div style={{ animation: 'jlFadeIn .3s ease' }}>
       <div className="mb-4 flex items-center justify-between">
@@ -102,6 +109,7 @@ export function MomentsEditor({ initial }: { initial: Moment[] }) {
                 onCancel={() => setEditingId(null)}
                 onSave={(patch) => saveMoment(m.id, patch)}
                 onDelete={() => removeMoment(m.id)}
+                onImage={(url) => onMomentImage(m.id, url)}
               />
             ))}
             {items.length === 0 && (
@@ -123,6 +131,7 @@ function SortableMoment({
   onCancel,
   onSave,
   onDelete,
+  onImage,
 }: {
   moment: Moment;
   editing: boolean;
@@ -130,6 +139,7 @@ function SortableMoment({
   onCancel: () => void;
   onSave: (patch: Partial<Moment>) => void;
   onDelete: () => void;
+  onImage: (url: string | null) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: moment.id,
@@ -172,7 +182,13 @@ function SortableMoment({
       </div>
 
       {editing && (
-        <MomentForm moment={moment} onCancel={onCancel} onSave={onSave} onDelete={onDelete} />
+        <MomentForm
+          moment={moment}
+          onCancel={onCancel}
+          onSave={onSave}
+          onDelete={onDelete}
+          onImage={onImage}
+        />
       )}
     </div>
   );
@@ -183,22 +199,83 @@ function MomentForm({
   onCancel,
   onSave,
   onDelete,
+  onImage,
 }: {
   moment: Moment;
   onCancel: () => void;
   onSave: (patch: Partial<Moment>) => void;
   onDelete: () => void;
+  onImage: (url: string | null) => void;
 }) {
   const [title, setTitle] = useState(moment.title);
   const [startsAt, setStartsAt] = useState(moment.startsAt ? moment.startsAt.slice(0, 16) : '');
   const [location, setLocation] = useState(moment.location ?? '');
   const [description, setDescription] = useState(moment.description);
   const [dressCode, setDressCode] = useState(moment.dressCode ?? '');
+  const [uploading, startUpload] = useTransition();
+  const [imgError, setImgError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function onPhoto(file: File | undefined) {
+    if (!file) return;
+    setImgError(null);
+    const form = new FormData();
+    form.set('file', file);
+    startUpload(async () => {
+      const res = await uploadMomentImageAction(moment.id, form);
+      if (res.error) setImgError(res.error);
+      else if (res.url) onImage(res.url);
+    });
+  }
+
+  function removePhoto() {
+    startUpload(async () => {
+      await removeMomentImageAction(moment.id);
+      onImage(null);
+    });
+  }
 
   return (
     <div className="mt-4 grid gap-3 border-t border-line pt-4">
       <Labeled label="Titre">
         <input value={title} onChange={(e) => setTitle(e.target.value)} className={fieldClass} />
+      </Labeled>
+
+      <Labeled label="Photo">
+        <div className="flex items-center gap-3">
+          <div className="h-[64px] w-[92px] flex-none overflow-hidden rounded-lg border border-line">
+            <ImageSlot src={moment.mediaUrl} label="Photo" alt={moment.title} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading}
+                className="rounded-lg border border-line bg-bg px-3.5 py-1.5 font-body text-[12px] uppercase tracking-[0.1em] text-olive transition-colors hover:bg-panel disabled:opacity-50"
+              >
+                {uploading ? 'Téléversement…' : moment.mediaUrl ? 'Remplacer' : 'Téléverser'}
+              </button>
+              {moment.mediaUrl && !uploading && (
+                <button
+                  type="button"
+                  onClick={removePhoto}
+                  className="font-body text-[12px] text-muted transition-colors hover:text-[#9a3b2e]"
+                >
+                  Retirer
+                </button>
+              )}
+            </div>
+            {imgError && <span className="font-body text-[12px] text-[#9a3b2e]">{imgError}</span>}
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => onPhoto(e.target.files?.[0])}
+          />
+        </div>
       </Labeled>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Labeled label="Date & heure">

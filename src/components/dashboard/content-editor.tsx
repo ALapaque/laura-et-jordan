@@ -1,7 +1,7 @@
 'use client';
 
-import { useRef, useState, useTransition } from 'react';
-import { updateContentAction, uploadMusicAction } from '@/app/dashboard/content/actions';
+import { useState, useTransition } from 'react';
+import { updateContentAction } from '@/app/dashboard/content/actions';
 import { MotifBackground } from '@/components/ui/motif-background';
 
 interface ContentValues {
@@ -9,28 +9,12 @@ interface ContentValues {
   eventDate: string; // yyyy-mm-dd | ''
   venue: string;
   welcomeText: string;
-  musicUrl: string;
 }
 
 export function ContentEditor({ initial }: { initial: ContentValues }) {
   const [values, setValues] = useState<ContentValues>(initial);
   const [pending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
-  const [uploading, startUpload] = useTransition();
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  function onMusicFile(file: File | undefined) {
-    if (!file) return;
-    setUploadError(null);
-    const form = new FormData();
-    form.set('file', file);
-    startUpload(async () => {
-      const res = await uploadMusicAction(form);
-      if (res.error) setUploadError(res.error);
-      else if (res.url) setValues((v) => ({ ...v, musicUrl: res.url! }));
-    });
-  }
 
   function set<K extends keyof ContentValues>(key: K, value: ContentValues[K]) {
     setValues((v) => ({ ...v, [key]: value }));
@@ -44,7 +28,6 @@ export function ContentEditor({ initial }: { initial: ContentValues }) {
         eventDate: values.eventDate || null,
         venue: values.venue || null,
         welcomeText: values.welcomeText,
-        musicUrl: values.musicUrl || null,
       });
       setSaved(true);
     });
@@ -99,47 +82,6 @@ export function ContentEditor({ initial }: { initial: ContentValues }) {
             rows={3}
             className={`${inputClass} resize-none`}
           />
-        </Field>
-
-        <Field label="Musique d'ambiance">
-          <div className="flex flex-col gap-2.5">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                disabled={uploading}
-                className="rounded-lg border border-line bg-bg px-4 py-2 font-body text-[12px] uppercase tracking-[0.1em] text-olive transition-colors hover:bg-panel disabled:opacity-50"
-              >
-                {uploading ? 'Téléversement…' : 'Téléverser un fichier'}
-              </button>
-              {values.musicUrl && !uploading && (
-                <button
-                  type="button"
-                  onClick={() => set('musicUrl', '')}
-                  className="font-body text-[12px] text-muted transition-colors hover:text-[#9a3b2e]"
-                >
-                  Retirer
-                </button>
-              )}
-            </div>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="audio/*"
-              className="hidden"
-              onChange={(e) => onMusicFile(e.target.files?.[0])}
-            />
-            {uploadError && <span className="font-body text-[12px] text-[#9a3b2e]">{uploadError}</span>}
-            <input
-              value={values.musicUrl}
-              onChange={(e) => set('musicUrl', e.target.value)}
-              placeholder="…ou collez une URL (https://…/ambiance.mp3)"
-              className={`${inputClass} font-mono text-[12px]`}
-            />
-            {values.musicUrl && (
-              <audio src={values.musicUrl} controls className="w-full" preload="none" />
-            )}
-          </div>
         </Field>
 
         <div className="flex items-center gap-3">

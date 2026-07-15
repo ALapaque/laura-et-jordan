@@ -1,36 +1,26 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Lenis from 'lenis';
 import { EnvelopeIntro, type IntroStage } from './envelope-intro';
-import { InvitationContext } from './invitation-context';
 
 const INTRO_SEEN_KEY = 'jl_intro_seen';
-const MUSIC_KEY = 'jl_music_choice';
-
-type MusicChoice = 'pending' | 'on' | 'off';
 
 export function InvitationProvider({
   children,
-  musicUrl,
   preview = false,
 }: {
   children: React.ReactNode;
-  musicUrl: string | null;
   preview?: boolean;
 }) {
   const [stage, setStage] = useState<IntroStage>('sealed');
-  const [musicOn, setMusicOn] = useState(false);
-  const [musicChoice, setMusicChoice] = useState<MusicChoice>('pending');
-  const [submitted, setSubmitted] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [atRsvp, setAtRsvp] = useState(false);
 
   const lenisRef = useRef<Lenis | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const hasMusic = Boolean(musicUrl);
 
-  // Détermine l'état initial (mémoire intro + choix musique + reduced-motion).
+  // Détermine l'état initial (mémoire intro + reduced-motion).
   useEffect(() => {
     setMounted(true);
     const reduce =
@@ -41,8 +31,6 @@ export function InvitationProvider({
     if (!preview) {
       try {
         if (localStorage.getItem(INTRO_SEEN_KEY) === '1' || reduce) setStage('done');
-        const m = localStorage.getItem(MUSIC_KEY);
-        if (m === 'on' || m === 'off') setMusicChoice(m);
       } catch {
         // localStorage indisponible
       }
@@ -114,47 +102,18 @@ export function InvitationProvider({
     return () => io.disconnect();
   }, [mounted, reducedMotion]);
 
-  // ── Lecture audio (gère la politique d'autoplay) ───────────────
-  const playAudio = useCallback(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.volume = 0.5;
-    audio.play().then(
-      () => setMusicOn(true),
-      () => setMusicOn(false), // bloqué par le navigateur — rejouable au 1er geste
-    );
-  }, []);
-
-  const pauseAudio = useCallback(() => {
-    audioRef.current?.pause();
-    setMusicOn(false);
-  }, []);
-
-  const persistChoice = useCallback(
-    (choice: MusicChoice) => {
-      setMusicChoice(choice);
-      if (preview) return;
-      try {
-        localStorage.setItem(MUSIC_KEY, choice);
-      } catch {
-        // ignore
-      }
-    },
-    [preview],
-  );
-
-  // Visiteur qui avait déjà choisi « avec musique » : reprise au 1er geste.
+  // ── Détecte l'arrivée sur la section RSVP (bascule le bouton flottant) ──
   useEffect(() => {
-    if (!mounted || !hasMusic || musicChoice !== 'on' || musicOn) return;
-    const resume = () => {
-      playAudio();
-      window.removeEventListener('pointerdown', resume);
-    };
-    // tente tout de suite (souvent bloqué), sinon au premier geste
-    playAudio();
-    window.addEventListener('pointerdown', resume, { once: true });
-    return () => window.removeEventListener('pointerdown', resume);
-  }, [mounted, hasMusic, musicChoice, musicOn, playAudio]);
+    if (!mounted) return;
+    const target = document.getElementById('rsvp-anchor');
+    if (!target) return;
+    const io = new IntersectionObserver(
+      (entries) => setAtRsvp(entries[0]?.isIntersecting ?? false),
+      { rootMargin: '0px 0px -25% 0px', threshold: 0 },
+    );
+    io.observe(target);
+    return () => io.disconnect();
+  }, [mounted]);
 
   // ── Actions intro ──────────────────────────────────────────────
   const openEnvelope = useCallback(() => {
@@ -168,31 +127,8 @@ export function InvitationProvider({
     setStage('done');
     saveSeen();
   }, [saveSeen]);
-  const replayIntro = useCallback(() => {
-    setStage('sealed');
-    window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' });
-  }, [reducedMotion]);
 
-  // ── Actions musique ────────────────────────────────────────────
-  const toggleMusic = useCallback(() => {
-    if (musicOn) {
-      pauseAudio();
-      persistChoice('off');
-    } else {
-      playAudio();
-      persistChoice('on');
-    }
-  }, [musicOn, pauseAudio, playAudio, persistChoice]);
-
-  const chooseMusic = useCallback(
-    (on: boolean) => {
-      if (on) playAudio();
-      else pauseAudio();
-      persistChoice(on ? 'on' : 'off');
-    },
-    [playAudio, pauseAudio, persistChoice],
-  );
-
+  // ── Navigation ─────────────────────────────────────────────────
   const scrollToRsvp = useCallback(() => {
     const target = document.getElementById('rsvp-anchor');
     if (!target) return;
@@ -200,24 +136,13 @@ export function InvitationProvider({
     else target.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth' });
   }, [reducedMotion]);
 
-  const value = useMemo(
-    () => ({
-      introDone,
-      musicOn,
-      hasMusic,
-      submitted,
-      toggleMusic,
-      replayIntro,
-      scrollToRsvp,
-      setSubmitted,
-    }),
-    [introDone, musicOn, hasMusic, submitted, toggleMusic, replayIntro, scrollToRsvp],
-  );
-
-  const showMusicPrompt = mounted && introDone && hasMusic && musicChoice === 'pending';
+  const scrollToTop = useCallback(() => {
+    if (lenisRef.current) lenisRef.current.scrollTo(0);
+    else window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' });
+  }, [reducedMotion]);
 
   return (
-    <InvitationContext.Provider value={value}>
+    <>
       {mounted && stage !== 'done' && (
         <EnvelopeIntro
           stage={stage}
@@ -230,78 +155,17 @@ export function InvitationProvider({
 
       {children}
 
-      {/* Popup consentement musique (une fois, au démarrage) */}
-      {showMusicPrompt && (
-        <div
-          className="fixed inset-0 z-[55] flex items-center justify-center px-6"
-          style={{ animation: 'jlFadeIn .4s ease' }}
-        >
-          <div
-            aria-hidden
-            className="absolute inset-0 bg-ink/25 backdrop-blur-[2px]"
-            onClick={() => chooseMusic(false)}
-          />
-          <div
-            role="dialog"
-            aria-label="Musique d'ambiance"
-            className="relative w-full max-w-[340px] rounded-2xl border border-line bg-panel px-7 py-8 text-center shadow-[0_24px_60px_rgba(64,57,42,0.28)]"
-            style={{ animation: 'jlFadeUp .45s ease both' }}
-          >
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft text-[22px] text-olive">
-              ♪
-            </div>
-            <h2 className="font-display text-[30px] leading-tight text-ink">
-              Une petite musique ?
-            </h2>
-            <p className="mx-auto mt-2 max-w-[260px] font-body text-[15px] leading-relaxed text-muted">
-              Découvrez l'invitation en musique — vous pourrez la couper à tout moment.
-            </p>
-            <div className="mt-6 flex flex-col gap-2.5">
-              <button
-                onClick={() => chooseMusic(true)}
-                className="rounded-[10px] border-none bg-olive px-5 py-3 font-body text-[14px] uppercase tracking-[0.12em] text-panel transition-colors hover:bg-ink"
-              >
-                Oui, avec musique
-              </button>
-              <button
-                onClick={() => chooseMusic(false)}
-                className="rounded-[10px] border border-line bg-transparent px-5 py-3 font-body text-[13px] uppercase tracking-[0.12em] text-olive transition-colors hover:bg-surface"
-              >
-                Sans musique
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Contrôle musique persistant (mute/unmute pendant tout le scroll) */}
-      {introDone && hasMusic && !showMusicPrompt && (
+      {/* Bouton flottant : « Répondre » puis « Haut » une fois à la section RSVP */}
+      {introDone && (
         <button
-          onClick={toggleMusic}
-          aria-label={musicOn ? 'Couper la musique' : 'Activer la musique'}
-          aria-pressed={musicOn}
-          className="fixed bottom-5 left-5 z-40 flex h-11 w-11 items-center justify-center rounded-full border border-line bg-panel/90 text-[17px] text-olive shadow-[0_8px_20px_rgba(64,57,42,0.16)] backdrop-blur transition-colors hover:bg-panel"
-          style={{ animation: 'jlFadeUp .4s ease both' }}
-        >
-          {musicOn ? '♪' : '♫'}
-          {!musicOn && (
-            <span className="pointer-events-none absolute h-[1.5px] w-6 rotate-45 rounded bg-olive/70" />
-          )}
-        </button>
-      )}
-
-      {/* Bouton flottant « Répondre » */}
-      {introDone && !submitted && (
-        <button
-          onClick={scrollToRsvp}
+          onClick={atRsvp ? scrollToTop : scrollToRsvp}
+          aria-label={atRsvp ? 'Remonter en haut de la page' : 'Aller à la réponse'}
           className="fixed bottom-5 right-5 z-40 rounded-full border-none bg-olive px-6 py-3.5 font-body text-[13px] uppercase tracking-[0.14em] text-panel shadow-[0_10px_26px_rgba(64,57,42,0.22)] transition-colors hover:bg-ink"
           style={{ animation: 'jlFadeUp .4s ease both' }}
         >
-          Répondre
+          {atRsvp ? '↑ Haut' : 'Répondre'}
         </button>
       )}
-
-      {musicUrl && <audio ref={audioRef} src={musicUrl} loop preload="auto" aria-hidden />}
-    </InvitationContext.Provider>
+    </>
   );
 }

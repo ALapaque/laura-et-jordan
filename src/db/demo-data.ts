@@ -1,4 +1,11 @@
-import { DEFAULT_RSVP_FIELDS, type Moment, type Parcours, type RsvpResponse, type Wedding } from '@/lib/types';
+import {
+  DEFAULT_RSVP_FIELDS,
+  type DetailCard,
+  type Moment,
+  type Parcours,
+  type RsvpResponse,
+  type Wedding,
+} from '@/lib/types';
 
 /**
  * Données de démonstration (spec §10) — servent de source aux `seed.ts`
@@ -11,7 +18,6 @@ export const demoWedding: Wedding = {
   coupleNames: 'Laura & Jordan',
   eventDate: '2027-07-31T14:00:00.000Z', // 31 juillet 2027 (charte / faire-part)
   venue: null,
-  musicUrl: '/demo-music.wav', // boucle d'ambiance de démo (remplaçable dans le dashboard)
   welcomeText: "C'est entourés de ceux qui comptent que nous voulons dire oui.",
   rsvpDeadline: null,
   locales: ['fr'],
@@ -70,6 +76,24 @@ export const demoMoments: Moment[] = [
     mapLng: null,
     mediaUrl: null,
     sortOrder: 3,
+  },
+];
+
+export const demoDetailCards: DetailCard[] = [
+  { id: 'd-lieu', label: 'Lieu', value: 'Le lieu vous sera bientôt dévoilé', mediaUrl: null, sortOrder: 0 },
+  {
+    id: 'd-dress',
+    label: 'Dress code',
+    value: 'Élégant · tons naturels bienvenus',
+    mediaUrl: null,
+    sortOrder: 1,
+  },
+  {
+    id: 'd-acces',
+    label: 'Accès & hébergements',
+    value: 'Informations à venir prochainement',
+    mediaUrl: null,
+    sortOrder: 2,
   },
 ];
 
@@ -142,6 +166,7 @@ function resp(
 const store = {
   wedding: { ...demoWedding },
   moments: demoMoments.map((m) => ({ ...m })),
+  detailCards: demoDetailCards.map((c) => ({ ...c })),
   parcours: demoParcours.map((p) => ({ ...p })),
   responses: demoResponses.map((r) => ({ ...r })),
 };
