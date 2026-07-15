@@ -48,6 +48,13 @@ export interface Wedding {
   heroVideoUrl: string | null;
 }
 
+/** Une photo de la galerie d'un moment (`id` = ligne moment_media, pour réordonner/retirer). */
+export interface MomentAsset {
+  id: string;
+  url: string;
+  sortOrder: number;
+}
+
 export interface Moment {
   id: string;
   title: string;
@@ -57,7 +64,7 @@ export interface Moment {
   dressCode: string | null;
   mapLat: number | null;
   mapLng: number | null;
-  mediaUrl: string | null;
+  media: MomentAsset[];
   sortOrder: number;
 }
 

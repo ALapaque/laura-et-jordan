@@ -71,6 +71,17 @@ export const moment = pgTable('moment', {
   sortOrder: integer('sort_order').notNull().default(0),
 });
 
+export const momentMedia = pgTable('moment_media', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  momentId: uuid('moment_id')
+    .notNull()
+    .references(() => moment.id, { onDelete: 'cascade' }),
+  mediaId: uuid('media_id')
+    .notNull()
+    .references(() => media.id, { onDelete: 'cascade' }),
+  sortOrder: integer('sort_order').notNull().default(0),
+});
+
 export const detailCard = pgTable('detail_card', {
   id: uuid('id').primaryKey().defaultRandom(),
   weddingId: uuid('wedding_id')
@@ -116,6 +127,7 @@ export const rsvpResponse = pgTable('rsvp_response', {
 
 export type WeddingRow = typeof wedding.$inferSelect;
 export type MomentRow = typeof moment.$inferSelect;
+export type MomentMediaRow = typeof momentMedia.$inferSelect;
 export type DetailCardRow = typeof detailCard.$inferSelect;
 export type ParcoursRow = typeof parcours.$inferSelect;
 export type RsvpResponseRow = typeof rsvpResponse.$inferSelect;
