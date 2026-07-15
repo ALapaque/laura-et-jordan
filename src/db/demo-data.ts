@@ -1,4 +1,11 @@
-import { DEFAULT_RSVP_FIELDS, type Moment, type Parcours, type RsvpResponse, type Wedding } from '@/lib/types';
+import {
+  DEFAULT_RSVP_FIELDS,
+  type DetailCard,
+  type Moment,
+  type Parcours,
+  type RsvpResponse,
+  type Wedding,
+} from '@/lib/types';
 
 /**
  * Données de démonstration (spec §10) — servent de source aux `seed.ts`
@@ -72,6 +79,24 @@ export const demoMoments: Moment[] = [
   },
 ];
 
+export const demoDetailCards: DetailCard[] = [
+  { id: 'd-lieu', label: 'Lieu', value: 'Le lieu vous sera bientôt dévoilé', mediaUrl: null, sortOrder: 0 },
+  {
+    id: 'd-dress',
+    label: 'Dress code',
+    value: 'Élégant · tons naturels bienvenus',
+    mediaUrl: null,
+    sortOrder: 1,
+  },
+  {
+    id: 'd-acces',
+    label: 'Accès & hébergements',
+    value: 'Informations à venir prochainement',
+    mediaUrl: null,
+    sortOrder: 2,
+  },
+];
+
 export const demoParcours: Parcours[] = [
   {
     id: 'p1',
@@ -141,6 +166,7 @@ function resp(
 const store = {
   wedding: { ...demoWedding },
   moments: demoMoments.map((m) => ({ ...m })),
+  detailCards: demoDetailCards.map((c) => ({ ...c })),
   parcours: demoParcours.map((p) => ({ ...p })),
   responses: demoResponses.map((r) => ({ ...r })),
 };

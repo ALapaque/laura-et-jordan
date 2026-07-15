@@ -1,9 +1,10 @@
 import 'server-only';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { media, moment, parcours, rsvpResponse, wedding } from '@/db/schema';
-import { demoStore, nextDemoId } from '@/db/demo-data';
+import { detailCard, media, moment, parcours, rsvpResponse, wedding } from '@/db/schema';
+import { demoDetailCards, demoStore, nextDemoId } from '@/db/demo-data';
 import type {
+  DetailCardRow,
   MomentRow,
   ParcoursRow,
   RsvpResponseRow,
@@ -13,6 +14,7 @@ import { generateToken } from './tokens';
 import {
   DEFAULT_RSVP_FIELDS,
   type Attending,
+  type DetailCard,
   type Moment,
   type Parcours,
   type RsvpFields,
@@ -471,8 +473,137 @@ export async function reorderMoments(orderedIds: string[]): Promise<void> {
   );
 }
 
+/** Insère une ligne `media` (image) et renvoie son id. */
+async function insertImageMedia(storagePath: string, url: string): Promise<string | null> {
+  if (!db) return null;
+  const [row] = await db
+    .insert(media)
+    .values({ kind: 'image', storagePath, url })
+    .returning({ id: media.id });
+  return row?.id ?? null;
+}
+
+/** Associe (ou retire) une photo à un moment. */
+export async function setMomentImage(
+  momentId: string,
+  input: { url: string; storagePath: string } | null,
+): Promise<void> {
+  if (!db) {
+    const m = demoStore().moments.find((x) => x.id === momentId);
+    if (m) m.mediaUrl = input?.url ?? null;
+    return;
+  }
+  if (!input) {
+    await db.update(moment).set({ mediaId: null }).where(eq(moment.id, momentId));
+    return;
+  }
+  const mediaId = await insertImageMedia(input.storagePath, input.url);
+  await db.update(moment).set({ mediaId }).where(eq(moment.id, momentId));
+}
+
+// ── Cartes « détails pratiques » ─────────────────────────────────
+function toDetailCard(row: DetailCardRow, mediaUrl: string | null): DetailCard {
+  return { id: row.id, label: row.label, value: row.value, mediaUrl, sortOrder: row.sortOrder };
+}
+
+/**
+ * Cartes pratiques (lieu, tenue, accès…). Résilient : si la table `detail_card`
+ * n'existe pas encore (script SQL non exécuté) ou est vide, renvoie les cartes
+ * par défaut (texte seul) pour ne jamais casser le rendu du site.
+ */
+export async function getDetailCards(): Promise<DetailCard[]> {
+  if (!db) return demoStore().detailCards.map((c) => ({ ...c })).sort(bySortOrder);
+  try {
+    const rows = await db
+      .select({ card: detailCard, mediaUrl: media.url })
+      .from(detailCard)
+      .leftJoin(media, eq(detailCard.mediaId, media.id))
+      .orderBy(asc(detailCard.sortOrder));
+    if (rows.length === 0) return demoDetailCards.map((c) => ({ ...c }));
+    return rows.map((r) => toDetailCard(r.card, r.mediaUrl));
+  } catch {
+    // Table absente (script 03_detail_cards.sql non exécuté) → repli défensif.
+    return demoDetailCards.map((c) => ({ ...c }));
+  }
+}
+
+export async function createDetailCard(input: {
+  label: string;
+  value: string;
+}): Promise<DetailCard> {
+  if (!db) {
+    const store = demoStore();
+    const c: DetailCard = {
+      id: nextDemoId('d'),
+      label: input.label,
+      value: input.value,
+      mediaUrl: null,
+      sortOrder: store.detailCards.length,
+    };
+    store.detailCards.push(c);
+    return c;
+  }
+  const [w] = await db.select({ id: wedding.id }).from(wedding).limit(1);
+  if (!w) throw new Error('Aucun mariage configuré');
+  const [{ count } = { count: 0 }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(detailCard);
+  const [row] = await db
+    .insert(detailCard)
+    .values({ weddingId: w.id, label: input.label, value: input.value, sortOrder: count })
+    .returning();
+  return toDetailCard(row!, null);
+}
+
+export async function updateDetailCard(
+  id: string,
+  input: { label?: string; value?: string },
+): Promise<void> {
+  if (!db) {
+    const c = demoStore().detailCards.find((x) => x.id === id);
+    if (c) {
+      if (input.label !== undefined) c.label = input.label;
+      if (input.value !== undefined) c.value = input.value;
+    }
+    return;
+  }
+  await db
+    .update(detailCard)
+    .set({
+      ...(input.label !== undefined && { label: input.label }),
+      ...(input.value !== undefined && { value: input.value }),
+    })
+    .where(eq(detailCard.id, id));
+}
+
+export async function setDetailCardImage(
+  id: string,
+  input: { url: string; storagePath: string } | null,
+): Promise<void> {
+  if (!db) {
+    const c = demoStore().detailCards.find((x) => x.id === id);
+    if (c) c.mediaUrl = input?.url ?? null;
+    return;
+  }
+  if (!input) {
+    await db.update(detailCard).set({ mediaId: null }).where(eq(detailCard.id, id));
+    return;
+  }
+  const mediaId = await insertImageMedia(input.storagePath, input.url);
+  await db.update(detailCard).set({ mediaId }).where(eq(detailCard.id, id));
+}
+
+export async function deleteDetailCard(id: string): Promise<void> {
+  if (!db) {
+    const store = demoStore();
+    store.detailCards = store.detailCards.filter((c) => c.id !== id);
+    return;
+  }
+  await db.delete(detailCard).where(eq(detailCard.id, id));
+}
+
 // ── Comparateurs ─────────────────────────────────────────────────
-function bySortOrder(a: Moment, b: Moment) {
+function bySortOrder(a: { sortOrder: number }, b: { sortOrder: number }) {
   return a.sortOrder - b.sortOrder;
 }
 function byRecent(a: RsvpResponse, b: RsvpResponse) {
