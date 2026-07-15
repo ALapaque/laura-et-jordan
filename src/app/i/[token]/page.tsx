@@ -46,88 +46,92 @@ export default async function InvitationPage({ params, searchParams }: PageProps
 
   return (
     <InvitationProvider musicUrl={wedding.musicUrl} preview={preview}>
+      {/* Fond crème uni sur tout le site ; la toile de Jouy ne vit QUE dans le hero. */}
       <main className="relative min-h-screen bg-bg">
-        {/* Motif toile de Jouy plein cadre, derrière tout le contenu */}
-        <MotifBackground size="580px" />
-
         {preview && (
           <div className="fixed left-1/2 top-3.5 z-[70] -translate-x-1/2 rounded-full border border-line bg-panel/90 px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-sage backdrop-blur">
             Aperçu
           </div>
         )}
 
-        <div className="relative z-[1]">
-          <HeroSection wedding={wedding} countdown={countdown} />
+        <HeroSection wedding={wedding} countdown={countdown} />
 
-          <div className="mx-auto max-w-[540px] px-4 pb-16">
-            {/* Mot d'accueil */}
-            <div data-rev="init" className="my-7">
-              <ScallopedPanel scallop={26}>
-                <div className="px-9 py-14 text-center">
-                  <span className="font-body text-[12px] uppercase tracking-[0.34em] text-sage">
-                    Mot d'accueil
-                  </span>
-                  <p className="mx-auto mt-6 max-w-[400px] font-body text-[22px] leading-[1.7] text-ink">
-                    {welcome}
-                  </p>
-                  <div className="mx-auto mt-8 h-[9px] w-[9px] rotate-45 bg-gold" />
-                </div>
-              </ScallopedPanel>
-            </div>
+        <div className="mx-auto max-w-[540px] pb-16">
+          {/* Mot d'accueil */}
+          <section data-rev="init" className="px-8 py-[70px] text-center">
+            <span className="font-body text-[12px] uppercase tracking-[0.34em] text-sage">
+              Mot d'accueil
+            </span>
+            <p className="mx-auto mt-6 max-w-[420px] font-body text-[22px] leading-[1.7] text-ink">
+              {welcome}
+            </p>
+            <div className="mx-auto mt-8 h-[9px] w-[9px] rotate-45 bg-gold" />
+          </section>
 
-            <ProgrammeSection moments={moments} />
-            <DetailsSection wedding={wedding} />
-            <GallerySection />
+          <ProgrammeSection moments={moments} />
+          <DetailsSection wedding={wedding} />
+          <GallerySection />
 
-            {/* RSVP */}
-            <div id="rsvp-anchor" data-rev="init" className="my-7" style={{ scrollMarginTop: 80 }}>
-              <ScallopedPanel scallop={28}>
-                <div className="px-7 py-12">
-                  <div className="mb-8 text-center">
-                    <span className="font-body text-[12px] uppercase tracking-[0.34em] text-sage">
-                      Réponse
-                    </span>
-                    <h2 className="mt-2 font-display text-[46px] leading-none text-ink">
-                      Serez-vous des nôtres ?
-                    </h2>
-                  </div>
-                  <RsvpForm
-                    token={parcours.token}
-                    moments={moments}
-                    rsvpFields={parcours.rsvpFields}
-                    deadline={wedding.rsvpDeadline}
-                    locale={locale}
-                  />
-                  <p className="mt-8 text-center font-body text-[11px] leading-relaxed text-muted/80">
-                    Vos informations servent uniquement à l'organisation du mariage. Aucun suivi
-                    tiers ; données supprimables sur simple demande.
-                  </p>
-                </div>
-              </ScallopedPanel>
-            </div>
-
-            {/* Footer */}
-            <footer data-rev="init" className="px-6 pb-4 pt-12 text-center">
-              <span className="font-display text-[42px] text-ink">
-                Laura <span className="font-accent text-[0.55em] text-gold">&amp;</span> Jordan
+          {/* RSVP — carte crème simple */}
+          <section
+            id="rsvp-anchor"
+            data-rev="init"
+            className="mx-5 mt-6 rounded-2xl bg-panel px-6 py-[46px] shadow-[0_10px_34px_rgba(64,57,42,0.09)]"
+            style={{ scrollMarginTop: 80 }}
+          >
+            <div className="mb-8 text-center">
+              <span className="font-body text-[12px] uppercase tracking-[0.34em] text-sage">
+                Réponse
               </span>
-              <div className="mt-2.5 font-body text-[10px] uppercase tracking-[0.24em] text-sage">
-                Avec toute notre affection
-              </div>
-            </footer>
-          </div>
+              <h2 className="mt-2 font-display text-[48px] leading-none text-ink">
+                Serez-vous des nôtres ?
+              </h2>
+            </div>
+            <RsvpForm
+              token={parcours.token}
+              moments={moments}
+              rsvpFields={parcours.rsvpFields}
+              deadline={wedding.rsvpDeadline}
+              locale={locale}
+            />
+            <p className="mt-8 text-center font-body text-[11px] leading-relaxed text-muted/80">
+              Vos informations servent uniquement à l'organisation du mariage. Aucun suivi tiers ;
+              données supprimables sur simple demande.
+            </p>
+          </section>
+
+          {/* Footer */}
+          <footer data-rev="init" className="px-6 pb-4 pt-14 text-center">
+            <span className="font-display text-[42px] text-ink">
+              Laura <span className="font-accent text-[0.55em] text-gold">&amp;</span> Jordan
+            </span>
+            <div className="mt-2.5 font-body text-[10px] uppercase tracking-[0.24em] text-sage">
+              Avec toute notre affection
+            </div>
+          </footer>
         </div>
       </main>
     </InvitationProvider>
   );
 }
 
+/** Hero « faire-part » : c'est LE seul endroit avec la toile de Jouy + la carte festonnée. */
 function HeroSection({ wedding, countdown }: { wedding: Wedding; countdown: number | null }) {
   return (
-    <section className="relative flex min-h-screen w-full items-center justify-center px-5 py-20">
+    <section className="relative flex min-h-screen w-full items-center justify-center overflow-hidden px-5 py-20">
+      <MotifBackground size="560px" />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-[1]"
+        style={{
+          background:
+            'radial-gradient(ellipse at center, rgba(242,237,224,0.35) 0%, rgba(242,237,224,0.72) 78%)',
+        }}
+      />
+
       <ScallopedPanel
         scallop={30}
-        className="w-full max-w-[380px]"
+        className="relative z-[2] w-full max-w-[380px]"
         style={{ animation: 'jlFadeUp 1s ease both' }}
       >
         <div className="flex flex-col items-center gap-6 px-9 py-16 text-center">
@@ -181,47 +185,45 @@ function HeroSection({ wedding, countdown }: { wedding: Wedding; countdown: numb
 function ProgrammeSection({ moments }: { moments: Moment[] }) {
   if (moments.length === 0) return null;
   return (
-    <ScallopedPanel data-rev="init" className="my-7" scallop={28}>
-      <div className="px-7 py-12">
-        <div className="mb-10 text-center">
-          <span className="font-body text-[12px] uppercase tracking-[0.34em] text-sage">
-            Le programme
-          </span>
-          <h2 className="mt-2.5 font-display text-[46px] leading-none text-ink">La journée</h2>
-        </div>
-        <div className="relative mx-auto flex max-w-[420px] flex-col gap-1.5">
-          {moments.map((m, i) => (
-            <div key={m.id} className="relative flex gap-5 pb-8 pl-1">
-              <div className="flex flex-col items-center">
-                <span className="mt-1.5 h-[13px] w-[13px] flex-none rounded-full border-2 border-gold bg-accent" />
-                {i < moments.length - 1 && (
-                  <span className="mt-1 w-px flex-1 bg-[rgba(92,100,65,0.28)]" />
-                )}
+    <section className="px-6 py-14">
+      <div data-rev="init" className="mb-11 text-center">
+        <span className="font-body text-[12px] uppercase tracking-[0.34em] text-sage">
+          Le programme
+        </span>
+        <h2 className="mt-2.5 font-display text-[46px] leading-none text-ink">La journée</h2>
+      </div>
+      <div className="relative mx-auto flex max-w-[420px] flex-col gap-1.5">
+        {moments.map((m, i) => (
+          <div key={m.id} data-rev="init" className="relative flex gap-5 pb-8 pl-1">
+            <div className="flex flex-col items-center">
+              <span className="mt-1.5 h-[13px] w-[13px] flex-none rounded-full border-2 border-gold bg-accent" />
+              {i < moments.length - 1 && (
+                <span className="mt-1 w-px flex-1 bg-[rgba(92,100,65,0.28)]" />
+              )}
+            </div>
+            <div className="flex-1 pb-1.5">
+              <div className="flex items-start justify-between gap-3">
+                <h3 className="m-0 font-body text-[22px] font-medium text-ink">{m.title}</h3>
+                <span className="whitespace-nowrap font-mono text-[12px] text-sage">
+                  {momentTime(m)}
+                </span>
               </div>
-              <div className="flex-1 pb-1.5">
-                <div className="flex items-start justify-between gap-3">
-                  <h3 className="m-0 font-body text-[22px] font-medium text-ink">{m.title}</h3>
-                  <span className="whitespace-nowrap font-mono text-[12px] text-sage">
-                    {momentTime(m)}
-                  </span>
-                </div>
-                <div className="mt-0.5 font-body text-[14px] italic text-olive">
-                  {momentLocation(m)}
-                </div>
-                {m.description && (
-                  <p className="mt-2 font-body text-[15px] leading-[1.6] text-muted">
-                    {m.description}
-                  </p>
-                )}
-                <div className="mt-3 h-[128px] overflow-hidden rounded-[10px]">
-                  <ImageSlot src={m.mediaUrl} label="Lieu" alt={m.title} />
-                </div>
+              <div className="mt-0.5 font-body text-[14px] italic text-olive">
+                {momentLocation(m)}
+              </div>
+              {m.description && (
+                <p className="mt-2 font-body text-[15px] leading-[1.6] text-muted">
+                  {m.description}
+                </p>
+              )}
+              <div className="mt-3 h-[132px] overflow-hidden rounded-[10px]">
+                <ImageSlot src={m.mediaUrl} label="Lieu" alt={m.title} />
               </div>
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
-    </ScallopedPanel>
+    </section>
   );
 }
 
@@ -232,55 +234,49 @@ function DetailsSection({ wedding }: { wedding: Wedding }) {
     { label: 'Accès & hébergements', value: 'Informations à venir prochainement', slot: 'Accès' },
   ];
   return (
-    <ScallopedPanel data-rev="init" className="my-7" scallop={28}>
-      <div className="px-7 py-12 text-center">
-        <span className="font-body text-[12px] uppercase tracking-[0.34em] text-sage">
-          Détails pratiques
-        </span>
-        <div className="mx-auto mt-7 flex max-w-[420px] flex-col gap-4 text-left">
-          {cards.map((c) => (
-            <div
-              key={c.label}
-              className="overflow-hidden rounded-[13px] border border-line bg-surface"
-            >
-              <div className="h-[150px]">
-                <ImageSlot label={c.slot} />
-              </div>
-              <div className="px-[18px] py-[15px]">
-                <div className="mb-1 font-body text-[12px] uppercase tracking-[0.16em] text-olive">
-                  {c.label}
-                </div>
-                <div className="font-body text-[17px] text-ink">{c.value}</div>
-              </div>
+    <section
+      data-rev="init"
+      className="mx-5 my-6 rounded-[14px] bg-panel px-[30px] py-11 text-center shadow-[0_6px_24px_rgba(64,57,42,0.06)]"
+    >
+      <span className="font-body text-[12px] uppercase tracking-[0.34em] text-sage">
+        Détails pratiques
+      </span>
+      <div className="mx-auto mt-6 flex max-w-[420px] flex-col gap-4 text-left">
+        {cards.map((c) => (
+          <div key={c.label} className="overflow-hidden rounded-[13px] border border-line bg-surface">
+            <div className="h-[158px]">
+              <ImageSlot label={c.slot} />
             </div>
-          ))}
-        </div>
+            <div className="px-[18px] py-[15px]">
+              <div className="mb-1 font-body text-[12px] uppercase tracking-[0.16em] text-olive">
+                {c.label}
+              </div>
+              <div className="font-body text-[17px] text-ink">{c.value}</div>
+            </div>
+          </div>
+        ))}
       </div>
-    </ScallopedPanel>
+    </section>
   );
 }
 
 function GallerySection() {
   return (
-    <ScallopedPanel data-rev="init" className="my-7" scallop={28}>
-      <div className="px-7 py-12">
-        <div className="mb-7 text-center">
-          <span className="font-body text-[12px] uppercase tracking-[0.34em] text-sage">
-            Galerie
-          </span>
+    <section data-rev="init" className="px-5 pb-10 pt-14">
+      <div className="mb-6 text-center">
+        <span className="font-body text-[12px] uppercase tracking-[0.34em] text-sage">Galerie</span>
+      </div>
+      <div className="mx-auto grid max-w-[440px] grid-cols-2 gap-2.5">
+        <div className="col-span-2 h-[180px] overflow-hidden rounded-[10px]">
+          <ImageSlot label="Photo" />
         </div>
-        <div className="mx-auto grid max-w-[420px] grid-cols-2 gap-2.5">
-          <div className="col-span-2 h-[180px] overflow-hidden rounded-[10px]">
-            <ImageSlot label="Photo" />
-          </div>
-          <div className="h-[150px] overflow-hidden rounded-[10px]">
-            <ImageSlot label="Photo" />
-          </div>
-          <div className="h-[150px] overflow-hidden rounded-[10px]">
-            <ImageSlot label="Photo" />
-          </div>
+        <div className="h-[150px] overflow-hidden rounded-[10px]">
+          <ImageSlot label="Photo" />
+        </div>
+        <div className="h-[150px] overflow-hidden rounded-[10px]">
+          <ImageSlot label="Photo" />
         </div>
       </div>
-    </ScallopedPanel>
+    </section>
   );
 }

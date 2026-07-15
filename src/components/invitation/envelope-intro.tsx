@@ -2,7 +2,6 @@
 
 import { useEffect, useRef } from 'react';
 import { gsap } from 'gsap';
-import { MotifBackground } from '@/components/ui/motif-background';
 import { ScallopedPanel } from '@/components/ui/scalloped-panel';
 import { WaxSeal } from '@/components/ui/wax-seal';
 
@@ -214,14 +213,13 @@ export function EnvelopeIntro({
           : undefined
       }
     >
-      {/* Toile de Jouy derrière l'enveloppe, voilée pour la mettre en valeur */}
-      <MotifBackground size="560px" className="opacity-80" />
+      {/* Fond crème uni, doux vignettage (pas de toile ici — réservée au hero) */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 z-[1]"
         style={{
           background:
-            'radial-gradient(circle at 50% 44%, rgba(242,237,224,0.1) 0%, rgba(242,237,224,0.78) 74%)',
+            'radial-gradient(ellipse at 50% 44%, rgba(251,248,240,0.6) 0%, rgba(242,237,224,0) 62%)',
         }}
       />
 
@@ -352,17 +350,6 @@ export function EnvelopeIntro({
             zIndex: 4,
           }}
         >
-          {/* texture toile très discrète sur le rabat */}
-          <div
-            aria-hidden
-            className="absolute inset-0"
-            style={{
-              backgroundImage: 'url(/motif.jpg)',
-              backgroundSize: '330px',
-              mixBlendMode: 'multiply',
-              opacity: 0.12,
-            }}
-          />
           <svg
             className="absolute inset-0 h-full w-full"
             viewBox="0 0 100 100"
