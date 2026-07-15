@@ -10,10 +10,12 @@ Dans Supabase → **SQL Editor** → **New query**, colle et exécute dans l'ord
 2. [`02_seed.sql`](./02_seed.sql) — insère des données de démo + 3 liens de test. **Facultatif** (à ne lancer qu'une fois).
 3. [`03_detail_cards.sql`](./03_detail_cards.sql) — active la gestion des cartes « Détails pratiques » (texte + photo) depuis le dashboard. **Recommandé** (idempotent).
 4. [`04_moment_media.sql`](./04_moment_media.sql) — active les **galeries multi-photos** par moment (Dashboard → Moments). **Recommandé** (idempotent).
+5. [`05_rsvp_email.sql`](./05_rsvp_email.sql) — ajoute l'**email** des invités : permet à un invité de retrouver et modifier sa réponse. **Recommandé** (idempotent).
 
 > Sans le seed, l'app démarre vide : tu crées tes moments et tes parcours directement depuis le **dashboard**.
 > Sans `03_detail_cards.sql`, l'invitation affiche des cartes « Détails pratiques » par défaut (texte seul, non éditables) — rien ne casse.
 > Sans `04_moment_media.sql`, chaque moment garde sa photo unique existante ; l'ajout de plusieurs photos est désactivé — rien ne casse.
+> Sans `05_rsvp_email.sql`, l'email saisi par l'invité n'est pas stocké et « modifier ma réponse » ne retrouve rien — rien ne casse (le reste de la réponse est bien enregistré).
 
 ## 2. Compte des mariés (Authentication)
 

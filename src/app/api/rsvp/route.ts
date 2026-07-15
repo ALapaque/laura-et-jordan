@@ -53,6 +53,7 @@ export async function POST(request: Request) {
     saved = await saveRsvp({
       parcoursId: invitation.parcours.id,
       guestName: input.guestName.trim(),
+      email: input.email.trim() || null,
       attending: input.attending,
       headcount: input.attending === 'no' ? 0 : Math.max(1, input.headcount),
       perMoment,

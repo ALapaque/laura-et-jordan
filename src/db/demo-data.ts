@@ -135,19 +135,28 @@ export const demoParcours: Parcours[] = [
 ];
 
 export const demoResponses: RsvpResponse[] = [
-  resp('r1', 'p1', 'Famille Dubois', 'yes', 4, '2026-06-12', {
-    ceremonie: true,
-    apero: true,
-    diner: true,
-    soiree: true,
-  }),
-  resp('r2', 'p2', 'Camille & Théo', 'yes', 2, '2026-06-11', {
-    apero: true,
-    diner: true,
-    soiree: true,
-  }),
+  resp(
+    'r1',
+    'p1',
+    'Famille Dubois',
+    'yes',
+    4,
+    '2026-06-12',
+    { ceremonie: true, apero: true, diner: true, soiree: true },
+    'famille.dubois@exemple.be',
+  ),
+  resp(
+    'r2',
+    'p2',
+    'Camille & Théo',
+    'yes',
+    2,
+    '2026-06-11',
+    { apero: true, diner: true, soiree: true },
+    'camille.theo@exemple.be',
+  ),
   resp('r3', 'p3', 'Oncle Marc', 'maybe', 1, '2026-06-10'),
-  resp('r4', 'p1', 'Sophie Laurent', 'yes', 2, '2026-06-09', { ceremonie: true, diner: true }),
+  resp('r4', 'p1', 'Sophie Laurent', 'yes', 2, '2026-06-09', { ceremonie: true, diner: true }, 'sophie.laurent@exemple.be'),
   resp('r5', 'p1', 'Les Moreau', 'no', 0, '2026-06-08'),
   resp('r6', 'p2', 'Julie & Sam', 'yes', 2, '2026-06-07', { apero: true, diner: true }),
   resp('r7', 'p3', 'Grand-mère Alice', 'yes', 1, '2026-06-06'),
@@ -162,6 +171,7 @@ function resp(
   headcount: number,
   date: string,
   perMoment: Record<string, boolean> = {},
+  email: string | null = null,
 ): RsvpResponse {
   const parcoursName = demoParcours.find((p) => p.id === parcoursId)?.name ?? '';
   return {
@@ -169,6 +179,7 @@ function resp(
     parcoursId,
     parcoursName,
     guestName,
+    email,
     attending,
     headcount,
     perMoment,

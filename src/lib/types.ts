@@ -83,6 +83,7 @@ export interface RsvpResponse {
   parcoursId: string;
   parcoursName: string;
   guestName: string;
+  email: string | null;
   attending: Attending;
   headcount: number;
   perMoment: Record<string, boolean>;
@@ -90,4 +91,15 @@ export interface RsvpResponse {
   message: string | null;
   locale: string;
   createdAt: string;
+}
+
+/** Données pré-remplies quand un invité retrouve sa réponse via son email. */
+export interface RsvpPrefill {
+  guestName: string;
+  email: string;
+  attending: Attending;
+  headcount: number;
+  perMoment: Record<string, boolean>;
+  dietary: string;
+  message: string;
 }

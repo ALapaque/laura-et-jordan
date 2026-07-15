@@ -13,6 +13,7 @@ export const rsvpInputSchema = z
   .object({
     token: z.string().min(4).max(64),
     guestName: z.string().max(120).default(''),
+    email: z.string().trim().min(1, 'Merci d’indiquer votre email.').email('Email invalide.').max(200),
     attending: attendingSchema,
     headcount: z.number().int().min(0).max(20).default(1),
     perMoment: z.record(z.string(), z.boolean()).default({}),
