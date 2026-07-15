@@ -43,7 +43,6 @@ function toWedding(row: WeddingRow, coverUrl: string | null, heroVideoUrl: strin
     coupleNames: row.coupleNames,
     eventDate: toIso(row.eventDate),
     venue: row.venue,
-    musicUrl: row.musicUrl,
     welcomeText: row.welcomeText,
     rsvpDeadline: toIso(row.rsvpDeadline),
     locales: row.locales,
@@ -333,7 +332,6 @@ export async function updateWeddingContent(input: {
   eventDate?: string | null;
   venue?: string | null;
   welcomeText?: string;
-  musicUrl?: string | null;
 }): Promise<void> {
   if (!db) {
     const w = demoStore().wedding;
@@ -341,7 +339,6 @@ export async function updateWeddingContent(input: {
     if (input.eventDate !== undefined) w.eventDate = input.eventDate;
     if (input.venue !== undefined) w.venue = input.venue;
     if (input.welcomeText !== undefined) w.welcomeText = input.welcomeText;
-    if (input.musicUrl !== undefined) w.musicUrl = input.musicUrl;
     return;
   }
   const [w] = await db.select({ id: wedding.id }).from(wedding).limit(1);
@@ -355,7 +352,6 @@ export async function updateWeddingContent(input: {
       }),
       ...(input.venue !== undefined && { venue: input.venue }),
       ...(input.welcomeText !== undefined && { welcomeText: input.welcomeText }),
-      ...(input.musicUrl !== undefined && { musicUrl: input.musicUrl }),
       updatedAt: new Date(),
     })
     .where(eq(wedding.id, w.id));

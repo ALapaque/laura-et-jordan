@@ -10,7 +10,6 @@ export default async function ContentPage() {
         eventDate: wedding.eventDate ? wedding.eventDate.slice(0, 10) : '',
         venue: wedding.venue ?? '',
         welcomeText: wedding.welcomeText,
-        musicUrl: wedding.musicUrl ?? '',
       }}
     />
   );

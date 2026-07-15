@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { HeroControls } from '@/components/invitation/hero-controls';
 import { InvitationProvider } from '@/components/invitation/invitation-provider';
 import { RsvpForm } from '@/components/invitation/rsvp-form';
 import { ImageSlot } from '@/components/ui/image-slot';
@@ -45,15 +44,9 @@ export default async function InvitationPage({ params, searchParams }: PageProps
   const countdown = daysUntil(wedding.eventDate);
 
   return (
-    <InvitationProvider musicUrl={wedding.musicUrl} preview={preview}>
+    <InvitationProvider preview={preview}>
       {/* Fond crème uni sur tout le site ; la toile de Jouy ne vit QUE dans le hero. */}
       <main className="relative min-h-screen bg-bg">
-        {preview && (
-          <div className="fixed left-1/2 top-3.5 z-[70] -translate-x-1/2 rounded-full border border-line bg-panel/90 px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-sage backdrop-blur">
-            Aperçu
-          </div>
-        )}
-
         <HeroSection wedding={wedding} countdown={countdown} />
 
         <div className="mx-auto max-w-[540px] pb-16">
@@ -176,8 +169,6 @@ function HeroSection({ wedding, countdown }: { wedding: Wedding; countdown: numb
         </span>
         <span className="text-[14px] text-olive">⌄</span>
       </div>
-
-      <HeroControls />
     </section>
   );
 }

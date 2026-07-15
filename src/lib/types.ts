@@ -30,7 +30,6 @@ export interface Wedding {
   coupleNames: string;
   eventDate: string | null; // ISO — null => « [ Date à confirmer ] »
   venue: string | null;
-  musicUrl: string | null;
   welcomeText: string;
   rsvpDeadline: string | null;
   locales: string[];

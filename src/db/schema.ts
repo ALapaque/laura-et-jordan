@@ -38,7 +38,6 @@ export const wedding = pgTable('wedding', {
   venue: text('venue'),
   coverMediaId: uuid('cover_media_id').references(() => media.id, { onDelete: 'set null' }),
   heroVideoId: uuid('hero_video_id').references(() => media.id, { onDelete: 'set null' }),
-  musicUrl: text('music_url'),
   welcomeText: text('welcome_text').notNull().default(''),
   rsvpDeadline: timestamp('rsvp_deadline', { withTimezone: true }),
   theme: jsonb('theme').$type<Record<string, unknown>>().notNull().default({}),

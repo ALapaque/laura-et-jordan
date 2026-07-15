@@ -5,7 +5,6 @@ import { clsx } from 'clsx';
 import { formatDeadline } from '@/lib/format';
 import { rsvpInputSchema } from '@/lib/rsvp-schema';
 import type { Attending, Moment, RsvpFields } from '@/lib/types';
-import { useInvitation } from './invitation-context';
 
 type StepKey = 'presence' | 'names' | 'moments' | 'dietary' | 'message';
 
@@ -38,8 +37,6 @@ export function RsvpForm({
   deadline: string | null;
   locale?: 'fr' | 'nl';
 }) {
-  const { setSubmitted: setGlobalSubmitted } = useInvitation();
-
   const [attending, setAttending] = useState<Attending | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
   const [guestName, setGuestName] = useState('');
@@ -114,7 +111,6 @@ export function RsvpForm({
       });
       if (res.ok) {
         setSubmitted(true);
-        setGlobalSubmitted(true);
       } else {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
         setError(body?.error ?? 'Une erreur est survenue. Réessayez.');
@@ -129,7 +125,6 @@ export function RsvpForm({
   function resetToEdit() {
     setSubmitted(false);
     setStepIndex(0);
-    setGlobalSubmitted(false);
   }
 
   if (submitted) {
