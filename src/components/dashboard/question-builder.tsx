@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { RsvpQuestion, RsvpQuestionType } from '@/lib/types';
 
 const TYPES: { value: RsvpQuestionType; label: string }[] = [
@@ -32,6 +33,39 @@ function valuesOf(q: RsvpQuestion): string[] {
   if (q.type === 'yes_no') return ['Oui', 'Non'];
   if (q.type === 'single_choice' || q.type === 'multi_choice') return q.options ?? [];
   return [];
+}
+
+/**
+ * Champ des options d'un choix (unique/multiple). On conserve le texte brut saisi
+ * (avec virgules et espaces) dans un état local, séparé des options stockées : sinon le
+ * reformatage `options.join(', ')` à chaque frappe « avale » la virgule qu'on vient de taper.
+ * Les options propres (sans vides) sont dérivées en direct ; l'affichage se normalise au blur.
+ */
+function OptionsInput({
+  options,
+  onChange,
+}: {
+  options: string[];
+  onChange: (opts: string[]) => void;
+}) {
+  const [text, setText] = useState(() => options.join(', '));
+  return (
+    <input
+      value={text}
+      onChange={(e) => {
+        setText(e.target.value);
+        onChange(
+          e.target.value
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean),
+        );
+      }}
+      onBlur={() => setText(options.join(', '))}
+      placeholder="Options séparées par une virgule (ex. Viande, Poisson, Végétarien)"
+      className={`${FIELD} mt-2.5 w-full`}
+    />
+  );
 }
 
 export function QuestionBuilder({
@@ -207,18 +241,9 @@ export function QuestionBuilder({
             </div>
 
             {isChoice && (
-              <input
-                value={(q.options ?? []).join(', ')}
-                onChange={(e) =>
-                  patch(i, {
-                    options: e.target.value
-                      .split(',')
-                      .map((s) => s.trim())
-                      .filter(Boolean),
-                  })
-                }
-                placeholder="Options séparées par une virgule (ex. Viande, Poisson, Végétarien)"
-                className={`${FIELD} mt-2.5 w-full`}
+              <OptionsInput
+                options={q.options ?? []}
+                onChange={(opts) => patch(i, { options: opts })}
               />
             )}
 
