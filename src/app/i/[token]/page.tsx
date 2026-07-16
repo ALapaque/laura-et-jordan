@@ -7,7 +7,7 @@ import { MotifBackground } from '@/components/ui/motif-background';
 import { ScallopedPanel } from '@/components/ui/scalloped-panel';
 import { withDbRetry } from '@/db';
 import { daysUntil, heroDate, momentLocation, momentTime } from '@/lib/format';
-import { getDetailCards, getInvitationByToken } from '@/lib/queries';
+import { getDetailCards, getGalleryPhotos, getInvitationByToken } from '@/lib/queries';
 import type { DetailCard, Moment, MomentAsset, Wedding } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -37,8 +37,8 @@ export default async function InvitationPage({ params, searchParams }: PageProps
   const preview = sp.preview === '1';
   const locale = sp.lang === 'nl' ? 'nl' : 'fr';
 
-  const [invitation, detailCards] = await withDbRetry(() =>
-    Promise.all([getInvitationByToken(token), getDetailCards()]),
+  const [invitation, detailCards, galleryPhotos] = await withDbRetry(() =>
+    Promise.all([getInvitationByToken(token), getDetailCards(), getGalleryPhotos()]),
   );
   if (!invitation) notFound();
 
@@ -66,7 +66,7 @@ export default async function InvitationPage({ params, searchParams }: PageProps
 
           <ProgrammeSection moments={moments} />
           <DetailsSection cards={detailCards} />
-          <GallerySection />
+          <GallerySection photos={galleryPhotos} />
 
           {/* RSVP — carte crème simple */}
           <section
@@ -231,7 +231,7 @@ function MomentGallery({ assets, title }: { assets: MomentAsset[]; title: string
   if (assets.length === 1) {
     return (
       <div className="mt-3 h-[150px] overflow-hidden rounded-[10px]">
-        <ImageSlot src={assets[0]!.url} alt={title} />
+        <ImageSlot src={assets[0]!.url} alt={title} zoomable />
       </div>
     );
   }
@@ -242,12 +242,12 @@ function MomentGallery({ assets, title }: { assets: MomentAsset[]; title: string
     <div className="mt-3 grid grid-cols-2 gap-2">
       {odd && first && (
         <div className="col-span-2 h-[150px] overflow-hidden rounded-[10px]">
-          <ImageSlot src={first.url} alt={title} />
+          <ImageSlot src={first.url} alt={title} zoomable />
         </div>
       )}
       {gridItems.map((a) => (
         <div key={a.id} className="h-[110px] overflow-hidden rounded-[10px]">
-          <ImageSlot src={a.url} alt={title} />
+          <ImageSlot src={a.url} alt={title} zoomable />
         </div>
       ))}
     </div>
@@ -268,7 +268,7 @@ function DetailsSection({ cards }: { cards: DetailCard[] }) {
         {cards.map((c) => (
           <div key={c.id} className="overflow-hidden rounded-[13px] border border-line bg-surface">
             <div className="h-[158px]">
-              <ImageSlot src={c.mediaUrl} label={c.label || 'Photo'} alt={c.label} />
+              <ImageSlot src={c.mediaUrl} label={c.label || 'Photo'} alt={c.label} zoomable />
             </div>
             <div className="px-[18px] py-[15px]">
               <div className="mb-1 font-body text-[12px] uppercase tracking-[0.16em] text-olive">
@@ -283,22 +283,28 @@ function DetailsSection({ cards }: { cards: DetailCard[] }) {
   );
 }
 
-function GallerySection() {
+/** Galerie du couple — album libre (photos gérées au dashboard). Masquée si vide. */
+function GallerySection({ photos }: { photos: MomentAsset[] }) {
+  if (photos.length === 0) return null;
+  const odd = photos.length % 2 === 1;
+  const [first, ...rest] = photos;
+  const gridItems = odd ? rest : photos;
   return (
     <section data-rev="init" className="px-5 pb-10 pt-14">
       <div className="mb-6 text-center">
         <span className="font-body text-[12px] uppercase tracking-[0.34em] text-sage">Galerie</span>
       </div>
       <div className="mx-auto grid max-w-[440px] grid-cols-2 gap-2.5">
-        <div className="col-span-2 h-[180px] overflow-hidden rounded-[10px]">
-          <ImageSlot label="Photo" />
-        </div>
-        <div className="h-[150px] overflow-hidden rounded-[10px]">
-          <ImageSlot label="Photo" />
-        </div>
-        <div className="h-[150px] overflow-hidden rounded-[10px]">
-          <ImageSlot label="Photo" />
-        </div>
+        {odd && first && (
+          <div className="col-span-2 h-[180px] overflow-hidden rounded-[10px]">
+            <ImageSlot src={first.url} alt="Galerie" zoomable />
+          </div>
+        )}
+        {gridItems.map((a) => (
+          <div key={a.id} className="h-[150px] overflow-hidden rounded-[10px]">
+            <ImageSlot src={a.url} alt="Galerie" zoomable />
+          </div>
+        ))}
       </div>
     </section>
   );

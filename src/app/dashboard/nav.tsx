@@ -10,6 +10,7 @@ const TABS = [
   { href: '/dashboard/rsvp', label: 'RSVP' },
   { href: '/dashboard/content', label: 'Contenu' },
   { href: '/dashboard/moments', label: 'Moments' },
+  { href: '/dashboard/gallery', label: 'Galerie' },
   { href: '/dashboard/settings', label: 'Paramètres' },
 ];
 

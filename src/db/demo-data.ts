@@ -2,6 +2,7 @@ import {
   DEFAULT_RSVP_FIELDS,
   type DetailCard,
   type Moment,
+  type MomentAsset,
   type Parcours,
   type RsvpResponse,
   type Wedding,
@@ -197,6 +198,7 @@ const store = {
   detailCards: demoDetailCards.map((c) => ({ ...c })),
   parcours: demoParcours.map((p) => ({ ...p })),
   responses: demoResponses.map((r) => ({ ...r })),
+  gallery: [] as MomentAsset[],
 };
 
 export function demoStore() {
