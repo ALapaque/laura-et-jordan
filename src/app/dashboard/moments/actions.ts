@@ -12,6 +12,7 @@ import {
 } from '@/lib/queries';
 import { isStorageConfigured, uploadMedia } from '@/lib/storage';
 import type { Moment, MomentAsset } from '@/lib/types';
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from '@/lib/upload';
 
 function revalidateAll() {
   revalidatePath('/dashboard/moments');
@@ -59,7 +60,7 @@ export async function addMomentPhotoAction(
   if (!(file instanceof File) || file.size === 0) return { error: 'Aucun fichier sélectionné.' };
   if (!file.type.startsWith('image/'))
     return { error: 'Le fichier doit être une image (jpg, png, webp…).' };
-  if (file.size > 8 * 1024 * 1024) return { error: 'Image trop lourde (max 8 Mo).' };
+  if (file.size > MAX_UPLOAD_BYTES) return { error: `Image trop lourde (max ${MAX_UPLOAD_LABEL}).` };
   if (!isStorageConfigured()) {
     return { error: 'Storage Supabase non configuré — créez le bucket public « media ».' };
   }

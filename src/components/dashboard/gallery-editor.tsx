@@ -7,6 +7,7 @@ import {
   reorderGalleryPhotosAction,
 } from '@/app/dashboard/gallery/actions';
 import type { MomentAsset } from '@/lib/types';
+import { UPLOAD_HINT } from '@/lib/upload';
 
 export function GalleryEditor({ initial }: { initial: MomentAsset[] }) {
   const [photos, setPhotos] = useState<MomentAsset[]>(initial);
@@ -64,6 +65,7 @@ export function GalleryEditor({ initial }: { initial: MomentAsset[] }) {
         </button>
       </div>
 
+      <p className="mb-3 font-body text-[12px] text-sage">{UPLOAD_HINT}</p>
       {error && <p className="mb-3 font-body text-[13px] text-[#9a3b2e]">{error}</p>}
 
       {photos.length === 0 ? (

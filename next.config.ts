@@ -48,6 +48,16 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   reactStrictMode: true,
   poweredByHeader: false,
+  // Les uploads de photos (moments, galerie, détails pratiques) passent par des
+  // Server Actions. Next.js limite leur corps à 1 Mo PAR DÉFAUT → une photo de
+  // 2 Mo échouait avant même notre validation (8 Mo). On relève la limite.
+  // NB : Vercel plafonne aussi le corps d'une fonction serverless (~4,5 Mo) ;
+  // pour des photos plus lourdes il faudrait un upload direct vers le Storage.
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '8mb',
+    },
+  },
   images: {
     remotePatterns: supabaseHostname
       ? [{ protocol: 'https', hostname: supabaseHostname }]

@@ -10,6 +10,7 @@ import {
 } from '@/app/dashboard/content/actions';
 import { ImageSlot } from '@/components/ui/image-slot';
 import type { DetailCard } from '@/lib/types';
+import { UPLOAD_HINT } from '@/lib/upload';
 
 export function DetailCardsManager({ initial }: { initial: DetailCard[] }) {
   const [cards, setCards] = useState<DetailCard[]>(initial);
@@ -141,6 +142,7 @@ function DetailCardEditor({
           </button>
         )}
       </div>
+      <p className="font-body text-[11px] text-sage">{UPLOAD_HINT}</p>
       {imgError && <span className="font-body text-[12px] text-[#9a3b2e]">{imgError}</span>}
       <input
         ref={fileRef}
