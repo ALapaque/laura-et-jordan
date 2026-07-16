@@ -3,14 +3,17 @@ import { createServiceClient } from '@/lib/supabase/server';
 import { demoDetailCards, demoStore, nextDemoId } from '@/db/demo-data';
 import { generateToken } from './tokens';
 import {
+  DEFAULT_QUESTIONS,
   DEFAULT_RSVP_FIELDS,
   type Attending,
   type DetailCard,
   type Moment,
   type MomentAsset,
   type Parcours,
+  type RsvpAnswerValue,
   type RsvpFields,
   type RsvpPrefill,
+  type RsvpQuestion,
   type RsvpResponse,
   type Wedding,
 } from './types';
@@ -58,7 +61,7 @@ const WEDDING_COLS =
 const MOMENT_COLS =
   'id, title, startsAt:starts_at, location, description, dressCode:dress_code, mapLat:map_lat, mapLng:map_lng, sortOrder:sort_order, mediaId:media_id';
 const PARCOURS_COLS =
-  'id, token, name, visibleMomentIds:visible_moment_ids, rsvpFields:rsvp_fields, introOverride:intro_override, createdAt:created_at';
+  'id, token, name, visibleMomentIds:visible_moment_ids, rsvpFields:rsvp_fields, formQuestions:form_questions, introOverride:intro_override, createdAt:created_at';
 const RSVP_COLS =
   'id, parcoursId:parcours_id, guestName:guest_name, attending, headcount, perMoment:per_moment, dietary, message, locale, createdAt:created_at';
 const DETAIL_COLS_BASE = 'id, label, value, sortOrder:sort_order';
@@ -95,6 +98,7 @@ type ParcoursSel = {
   name: string;
   visibleMomentIds: string[];
   rsvpFields: RsvpFields | null;
+  formQuestions: RsvpQuestion[] | null;
   introOverride: string | null;
   createdAt: string;
 };
@@ -163,12 +167,19 @@ function toParcours(row: ParcoursSel): Parcours {
     name: row.name,
     visibleMomentIds: row.visibleMomentIds,
     rsvpFields: row.rsvpFields ?? { ...DEFAULT_RSVP_FIELDS },
+    // `null` (jamais configuré) → formulaire par défaut ; `[]` (vidé exprès) respecté.
+    formQuestions: row.formQuestions ?? DEFAULT_QUESTIONS.map((q) => ({ ...q })),
     introOverride: row.introOverride,
     createdAt: toIso(row.createdAt) ?? new Date().toISOString(),
   };
 }
 
-function toResponse(row: RsvpSel, parcoursName: string, email: string | null): RsvpResponse {
+function toResponse(
+  row: RsvpSel,
+  parcoursName: string,
+  email: string | null,
+  answers: Record<string, RsvpAnswerValue>,
+): RsvpResponse {
   return {
     id: row.id,
     parcoursId: row.parcoursId,
@@ -180,6 +191,7 @@ function toResponse(row: RsvpSel, parcoursName: string, email: string | null): R
     perMoment: row.perMoment,
     dietary: row.dietary,
     message: row.message,
+    answers,
     locale: row.locale,
     createdAt: toIso(row.createdAt) ?? new Date().toISOString(),
   };
@@ -287,9 +299,14 @@ export async function getResponses(): Promise<RsvpResponse[]> {
   const rows = ok<RsvpSel[]>(
     await supa.from('rsvp_response').select(RSVP_COLS).order('created_at', { ascending: false }),
   );
-  const emailById = await loadEmailMap();
+  const [emailById, answersById] = await Promise.all([loadEmailMap(), loadAnswersMap()]);
   return rows.map((r) =>
-    toResponse(r, nameById.get(r.parcoursId) ?? '—', emailById.get(r.id) ?? null),
+    toResponse(
+      r,
+      nameById.get(r.parcoursId) ?? '—',
+      emailById.get(r.id) ?? null,
+      answersById.get(r.id) ?? {},
+    ),
   );
 }
 
@@ -305,6 +322,24 @@ async function loadEmailMap(): Promise<Map<string, string | null>> {
   if (error) return map; // colonne `email` absente → aucun email
   for (const r of (data ?? []) as Array<{ id: string; email: string | null }>) {
     map.set(r.id, r.email ?? null);
+  }
+  return map;
+}
+
+/**
+ * Réponses aux questions dynamiques (`rsvp_response.answers`, script 07) — colonne
+ * additive lue à part pour ne jamais casser les lectures si le script n'a pas été lancé.
+ */
+async function loadAnswersMap(): Promise<Map<string, Record<string, RsvpAnswerValue>>> {
+  const map = new Map<string, Record<string, RsvpAnswerValue>>();
+  if (!supa) return map;
+  const { data, error } = await supa.from('rsvp_response').select('id, answers');
+  if (error) return map; // colonne `answers` absente → aucune réponse dynamique
+  for (const r of (data ?? []) as Array<{
+    id: string;
+    answers: Record<string, RsvpAnswerValue> | null;
+  }>) {
+    if (r.answers) map.set(r.id, r.answers);
   }
   return map;
 }
@@ -346,6 +381,7 @@ export async function createParcours(input: {
   name: string;
   visibleMomentIds: string[];
   rsvpFields?: RsvpFields;
+  formQuestions?: RsvpQuestion[];
   introOverride?: string | null;
 }): Promise<Parcours> {
   const token = generateToken(10);
@@ -357,6 +393,7 @@ export async function createParcours(input: {
       name: input.name,
       visibleMomentIds: input.visibleMomentIds,
       rsvpFields: input.rsvpFields ?? { ...DEFAULT_RSVP_FIELDS },
+      formQuestions: input.formQuestions ?? DEFAULT_QUESTIONS.map((q) => ({ ...q })),
       introOverride: input.introOverride ?? null,
       createdAt: new Date().toISOString(),
     };
@@ -374,6 +411,7 @@ export async function createParcours(input: {
         name: input.name,
         visible_moment_ids: input.visibleMomentIds,
         rsvp_fields: input.rsvpFields ?? { ...DEFAULT_RSVP_FIELDS },
+        form_questions: input.formQuestions ?? DEFAULT_QUESTIONS.map((q) => ({ ...q })),
         intro_override: input.introOverride ?? null,
       })
       .select(PARCOURS_COLS)
@@ -392,6 +430,36 @@ export async function deleteParcours(id: string): Promise<void> {
   done(await supa.from('parcours').delete().eq('id', id));
 }
 
+/** Met à jour un parcours (nom, moments visibles, formulaire, intro). NOUVEAU : aucune
+ *  mise à jour n'existait — un parcours ne pouvait ni être renommé ni reconfiguré. */
+export async function updateParcours(
+  id: string,
+  input: {
+    name?: string;
+    visibleMomentIds?: string[];
+    formQuestions?: RsvpQuestion[];
+    introOverride?: string | null;
+  },
+): Promise<void> {
+  if (!supa) {
+    const p = demoStore().parcours.find((x) => x.id === id);
+    if (p) {
+      if (input.name !== undefined) p.name = input.name;
+      if (input.visibleMomentIds !== undefined) p.visibleMomentIds = input.visibleMomentIds;
+      if (input.formQuestions !== undefined) p.formQuestions = input.formQuestions;
+      if (input.introOverride !== undefined) p.introOverride = input.introOverride;
+    }
+    return;
+  }
+  const set: Record<string, unknown> = {};
+  if (input.name !== undefined) set.name = input.name;
+  if (input.visibleMomentIds !== undefined) set.visible_moment_ids = input.visibleMomentIds;
+  if (input.formQuestions !== undefined) set.form_questions = input.formQuestions;
+  if (input.introOverride !== undefined) set.intro_override = input.introOverride;
+  if (Object.keys(set).length === 0) return;
+  done(await supa.from('parcours').update(set).eq('id', id));
+}
+
 // ── Mutations : RSVP (upsert par parcours + email, repli sur le nom) ──
 export interface SaveRsvpInput {
   parcoursId: string;
@@ -402,6 +470,7 @@ export interface SaveRsvpInput {
   perMoment: Record<string, boolean>;
   dietary: string | null;
   message: string | null;
+  answers: Record<string, RsvpAnswerValue>;
   locale: string;
   ipHash: string | null;
 }
@@ -435,6 +504,7 @@ export async function saveRsvp(
       perMoment: input.perMoment,
       dietary: input.dietary,
       message: input.message,
+      answers: input.answers,
       locale: input.locale,
       createdAt: new Date().toISOString(),
     };
@@ -508,7 +578,15 @@ export async function saveRsvp(
       // ignoré
     }
   }
-  return { response: toResponse(row, p.name, email), parcours: p };
+  // Réponses dynamiques : colonne additive, best-effort (ignorée si le script 07 n'a pas tourné).
+  if (Object.keys(input.answers).length) {
+    try {
+      await supa.from('rsvp_response').update({ answers: input.answers }).eq('id', row.id);
+    } catch {
+      // colonne `answers` absente → ignoré
+    }
+  }
+  return { response: toResponse(row, p.name, email, input.answers), parcours: p };
 }
 
 /**
@@ -534,14 +612,29 @@ export async function getGuestResponse(
       perMoment: { ...r.perMoment },
       dietary: r.dietary ?? '',
       message: r.message ?? '',
+      answers: { ...r.answers },
     };
   }
-  const { data, error } = await supa
+  const base =
+    'guestName:guest_name, email, attending, headcount, perMoment:per_moment, dietary, message';
+  const withAnswers = await supa
     .from('rsvp_response')
-    .select('guestName:guest_name, email, attending, headcount, perMoment:per_moment, dietary, message')
+    .select(`${base}, answers`)
     .eq('parcours_id', parcoursId)
     .order('created_at', { ascending: false });
-  if (error) return null; // colonne `email` absente ou autre → pas de pré-remplissage
+  let data: unknown;
+  if (withAnswers.error) {
+    // colonne `answers` (script 07) absente → réessaie sans les réponses dynamiques
+    const noAnswers = await supa
+      .from('rsvp_response')
+      .select(base)
+      .eq('parcours_id', parcoursId)
+      .order('created_at', { ascending: false });
+    if (noAnswers.error) return null; // colonne `email` absente ou autre → pas de pré-remplissage
+    data = noAnswers.data;
+  } else {
+    data = withAnswers.data;
+  }
   const rows = (data ?? []) as Array<{
     guestName: string;
     email: string | null;
@@ -550,6 +643,7 @@ export async function getGuestResponse(
     perMoment: Record<string, boolean> | null;
     dietary: string | null;
     message: string | null;
+    answers?: Record<string, RsvpAnswerValue> | null;
   }>;
   const r = rows.find((x) => x.email?.trim().toLowerCase() === emailLc);
   if (!r) return null;
@@ -561,6 +655,7 @@ export async function getGuestResponse(
     perMoment: r.perMoment ?? {},
     dietary: r.dietary ?? '',
     message: r.message ?? '',
+    answers: r.answers ?? {},
   };
 }
 

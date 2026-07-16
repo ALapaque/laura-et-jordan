@@ -48,5 +48,12 @@ export async function POST(request: Request) {
     if (v && visible.has(k)) perMoment[k] = true;
   }
 
-  return NextResponse.json({ found: true, response: { ...prefill, perMoment } });
+  // On ne renvoie que les réponses aux questions encore définies pour ce parcours.
+  const questionIds = new Set(invitation.parcours.formQuestions.map((q) => q.id));
+  const answers: Record<string, string | string[]> = {};
+  for (const [k, v] of Object.entries(prefill.answers)) {
+    if (questionIds.has(k)) answers[k] = v;
+  }
+
+  return NextResponse.json({ found: true, response: { ...prefill, perMoment, answers } });
 }

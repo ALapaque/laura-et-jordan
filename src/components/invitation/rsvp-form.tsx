@@ -1,29 +1,73 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { clsx } from 'clsx';
 import { formatDeadline } from '@/lib/format';
 import { rsvpInputSchema } from '@/lib/rsvp-schema';
-import type { Attending, Moment, RsvpFields } from '@/lib/types';
+import type { Attending, Moment, RsvpAnswerValue, RsvpQuestion } from '@/lib/types';
 
-type StepKey = 'presence' | 'names' | 'moments' | 'dietary' | 'message';
+type Step =
+  | { kind: 'presence' }
+  | { kind: 'names' }
+  | { kind: 'group'; title: string | null; help?: string; questions: RsvpQuestion[] };
 
-const DIET_CHIPS = ['Aucun', 'Végétarien', 'Vegan', 'Sans gluten'];
+// Calendrier/heure shadcn (react-day-picker + Radix) chargés à la demande :
+// le bundle n'arrive que si le parcours contient réellement un champ date/heure.
+const FieldSkeleton = () => (
+  <div className="h-[46px] w-full animate-pulse rounded-[9px] border border-line bg-surface" />
+);
+const DateField = dynamic(() => import('./date-fields').then((m) => m.DateField), {
+  ssr: false,
+  loading: FieldSkeleton,
+});
+const DateRangeField = dynamic(() => import('./date-fields').then((m) => m.DateRangeField), {
+  ssr: false,
+  loading: FieldSkeleton,
+});
+const TimeField = dynamic(() => import('./date-fields').then((m) => m.TimeField), {
+  ssr: false,
+  loading: FieldSkeleton,
+});
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Le pas « names » (email + nom) est toujours présent : l'email est requis et
-// sert d'identifiant pour retrouver/modifier sa réponse.
-function computeSteps(attending: Attending | null, fields: RsvpFields, momentsCount: number): StepKey[] {
-  if (attending === 'no') {
-    const steps: StepKey[] = ['presence', 'names'];
-    if (fields.askMessage) steps.push('message');
-    return steps;
+const INPUT_CLASS =
+  'w-full rounded-[9px] border border-line bg-surface px-3.5 py-3 font-body text-[16px] text-ink outline-none focus:border-olive';
+const LABEL_CLASS = 'mb-2 block font-body text-[11px] uppercase tracking-[0.14em] text-olive';
+
+// Découpe les questions en groupes selon les séparateurs `section` :
+// chaque `section` démarre une nouvelle étape (son libellé en devient le titre).
+type QuestionGroup = { title: string | null; help?: string; questions: RsvpQuestion[] };
+function splitIntoGroups(questions: RsvpQuestion[]): QuestionGroup[] {
+  const groups: QuestionGroup[] = [];
+  let current: QuestionGroup = { title: null, questions: [] };
+  for (const q of questions) {
+    if (q.type === 'section') {
+      if (current.questions.length || current.title !== null) groups.push(current);
+      current = { title: q.label, help: q.help, questions: [] };
+    } else {
+      current.questions.push(q);
+    }
   }
-  const steps: StepKey[] = ['presence', 'names'];
-  if (fields.askPerMoment && momentsCount > 0) steps.push('moments');
-  if (fields.askDietary) steps.push('dietary');
-  if (fields.askMessage) steps.push('message');
+  if (current.questions.length || current.title !== null) groups.push(current);
+  return groups;
+}
+
+// Étapes : présence + coordonnées (toujours), puis une étape par groupe de questions
+// ayant au moins une question visible (les groupes vides ou masqués sont sautés).
+function computeSteps(
+  attending: Attending | null,
+  questions: RsvpQuestion[],
+  isVisible: (q: RsvpQuestion) => boolean,
+): Step[] {
+  const steps: Step[] = [{ kind: 'presence' }, { kind: 'names' }];
+  if (attending === 'no') return steps;
+  for (const g of splitIntoGroups(questions)) {
+    if (g.questions.some(isVisible)) {
+      steps.push({ kind: 'group', title: g.title, help: g.help, questions: g.questions });
+    }
+  }
   return steps;
 }
 
@@ -33,20 +77,19 @@ type LookupResponse = {
   attending: Attending;
   headcount: number;
   perMoment: Record<string, boolean>;
-  dietary: string;
-  message: string;
+  answers: Record<string, RsvpAnswerValue>;
 };
 
 export function RsvpForm({
   token,
   moments,
-  rsvpFields,
+  questions,
   deadline,
   locale = 'fr',
 }: {
   token: string;
   moments: Moment[];
-  rsvpFields: RsvpFields;
+  questions: RsvpQuestion[];
   deadline: string | null;
   locale?: 'fr' | 'nl';
 }) {
@@ -54,11 +97,9 @@ export function RsvpForm({
   const [stepIndex, setStepIndex] = useState(0);
   const [guestName, setGuestName] = useState('');
   const [email, setEmail] = useState('');
-  const [headcount, setHeadcount] = useState(2);
-  const [perMoment, setPerMoment] = useState<Record<string, boolean>>({});
-  const [dietPick, setDietPick] = useState('');
-  const [dietary, setDietary] = useState('');
-  const [message, setMessage] = useState('');
+  const [headcount, setHeadcount] = useState(2); // question spéciale « nombre de personnes »
+  const [perMoment, setPerMoment] = useState<Record<string, boolean>>({}); // question spéciale « moments »
+  const [answers, setAnswers] = useState<Record<string, RsvpAnswerValue>>({}); // questions génériques
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,19 +111,41 @@ export function RsvpForm({
   const [lookupMsg, setLookupMsg] = useState<string | null>(null);
   const [editingExisting, setEditingExisting] = useState(false);
 
-  const steps = useMemo(
-    () => computeSteps(attending, rsvpFields, moments.length),
-    [attending, rsvpFields, moments.length],
+  const hasHeadcountQuestion = useMemo(
+    () => questions.some((q) => q.type === 'headcount'),
+    [questions],
   );
-  const stepKey = steps[Math.min(stepIndex, steps.length - 1)]!;
-  const isLast = stepIndex >= steps.length - 1;
-  const maxHead = rsvpFields.maxHeadcount || 12;
+
+  // Visibilité conditionnelle (showIf) évaluée sur les réponses courantes.
+  function isVisible(q: RsvpQuestion): boolean {
+    if (!q.showIf) return true;
+    const dep = answers[q.showIf.questionId];
+    if (Array.isArray(dep)) return dep.includes(q.showIf.value);
+    return dep === q.showIf.value;
+  }
+
+  const steps = computeSteps(attending, questions, isVisible);
+  const clampedIndex = Math.min(stepIndex, steps.length - 1);
+  const step = steps[clampedIndex]!;
+  const isLast = clampedIndex >= steps.length - 1;
+
+  const visibleQuestions = questions.filter(isVisible);
+
+  function isAnswered(q: RsvpQuestion): boolean {
+    if (q.type === 'headcount' || q.type === 'moments' || q.type === 'section') return true;
+    const v = answers[q.id];
+    if (Array.isArray(v)) return v.length > 0;
+    return typeof v === 'string' && v.trim() !== '';
+  }
 
   const emailValid = EMAIL_RE.test(email.trim());
-  const nextDisabled =
-    (stepKey === 'presence' && !attending) ||
-    (stepKey === 'names' &&
-      (!emailValid || (attending !== 'no' && rsvpFields.askNames && guestName.trim() === '')));
+  // Validation étape par étape : on ne peut avancer que si l'étape courante est complète.
+  function stepValid(s: Step): boolean {
+    if (s.kind === 'presence') return !!attending;
+    if (s.kind === 'names') return emailValid && (attending === 'no' || guestName.trim() !== '');
+    return s.questions.filter(isVisible).every((q) => !q.required || isAnswered(q));
+  }
+  const nextDisabled = !stepValid(step);
 
   function chooseAttending(value: Attending) {
     setAttending(value);
@@ -94,9 +157,8 @@ export function RsvpForm({
     setPerMoment((prev) => ({ ...prev, [id]: !prev[id] }));
   }
 
-  function pickDiet(value: string) {
-    setDietPick(value);
-    setDietary(value === 'Aucun' ? '' : value);
+  function setAnswer(qid: string, value: RsvpAnswerValue) {
+    setAnswers((prev) => ({ ...prev, [qid]: value }));
   }
 
   async function retrieveResponse() {
@@ -127,9 +189,7 @@ export function RsvpForm({
         setEmail(r.email || em);
         setHeadcount(r.headcount || 1);
         setPerMoment(r.perMoment ?? {});
-        setDietary(r.dietary ?? '');
-        setDietPick('');
-        setMessage(r.message ?? '');
+        setAnswers(r.answers ?? {});
         setEditingExisting(true);
         setLookupOpen(false);
         setStepIndex(0);
@@ -146,7 +206,7 @@ export function RsvpForm({
   async function advance() {
     if (nextDisabled) return;
     if (!isLast) {
-      setStepIndex((i) => i + 1);
+      setStepIndex(clampedIndex + 1);
       return;
     }
     await submit();
@@ -154,15 +214,25 @@ export function RsvpForm({
 
   async function submit() {
     setError(null);
+    // Ne garder que les réponses aux questions génériques VISIBLES et non vides.
+    const outAnswers: Record<string, RsvpAnswerValue> = {};
+    for (const q of visibleQuestions) {
+      if (q.type === 'headcount' || q.type === 'moments') continue;
+      const v = answers[q.id];
+      if (Array.isArray(v)) {
+        if (v.length) outAnswers[q.id] = v;
+      } else if (typeof v === 'string' && v.trim() !== '') {
+        outAnswers[q.id] = v;
+      }
+    }
     const payload = {
       token,
       guestName,
       email,
       attending: attending ?? 'maybe',
-      headcount,
+      headcount: hasHeadcountQuestion ? headcount : 1,
       perMoment,
-      dietary,
-      message,
+      answers: outAnswers,
       locale,
     };
     const parsed = rsvpInputSchema.safeParse(payload);
@@ -211,19 +281,23 @@ export function RsvpForm({
 
       {/* points d'étape */}
       <div className="mb-7 flex items-center justify-center gap-2">
-        {steps.map((key, i) => (
+        {steps.map((s, i) => (
           <span
-            key={key}
+            key={i}
             className={clsx(
               'h-1.5 rounded-full transition-all duration-300',
-              i === stepIndex ? 'w-6 bg-olive' : i < stepIndex ? 'w-1.5 bg-olive' : 'w-1.5 bg-olive/25',
+              i === clampedIndex
+                ? 'w-6 bg-olive'
+                : i < clampedIndex
+                  ? 'w-1.5 bg-olive'
+                  : 'w-1.5 bg-olive/25',
             )}
           />
         ))}
       </div>
 
       <div style={{ animation: 'jlFadeUp .4s ease both' }}>
-        {stepKey === 'presence' && (
+        {step.kind === 'presence' && (
           <div>
             <p className="mb-5 text-center font-body text-[18px] text-ink">
               Aurez-vous le plaisir de nous rejoindre ?
@@ -255,9 +329,7 @@ export function RsvpForm({
                 </button>
               ) : (
                 <div className="mx-auto max-w-[340px] rounded-xl border border-line bg-surface p-4 text-left">
-                  <label className="mb-2 block font-body text-[11px] uppercase tracking-[0.14em] text-olive">
-                    Votre email
-                  </label>
+                  <label className={LABEL_CLASS}>Votre email</label>
                   <input
                     type="email"
                     value={lookupEmail}
@@ -291,125 +363,79 @@ export function RsvpForm({
           </div>
         )}
 
-        {stepKey === 'names' && (
+        {step.kind === 'names' && (
           <div className="mx-auto flex max-w-[360px] flex-col gap-6">
+            <div className="text-center">
+              <h3 className="font-body text-[21px] text-ink">Vos coordonnées</h3>
+              <div className="mx-auto mt-2 h-px w-10 bg-gold/50" />
+            </div>
             <div>
-              <label className="mb-2 block font-body text-[11px] uppercase tracking-[0.14em] text-olive">
-                Votre email
-              </label>
+              <label className={LABEL_CLASS}>Votre email</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="vous@exemple.be"
-                className="w-full rounded-[9px] border border-line bg-surface px-3.5 py-3 font-body text-[16px] text-ink outline-none focus:border-olive"
+                className={INPUT_CLASS}
               />
               <p className="mt-1.5 font-body text-[12px] text-muted">
                 Pour retrouver et modifier votre réponse plus tard.
               </p>
             </div>
-            {rsvpFields.askNames && (
-              <div>
-                <label className="mb-2 block font-body text-[11px] uppercase tracking-[0.14em] text-olive">
-                  Nom(s) des invités
-                </label>
-                <input
-                  value={guestName}
-                  onChange={(e) => setGuestName(e.target.value)}
-                  placeholder="Ex. Camille & Théo Martin"
-                  className="w-full rounded-[9px] border border-line bg-surface px-3.5 py-3 font-body text-[16px] text-ink outline-none focus:border-olive"
-                />
+            <div>
+              <label className={LABEL_CLASS}>
+                Nom(s) des invités
+                {attending !== 'no' && <span className="text-gold"> *</span>}
+              </label>
+              <input
+                value={guestName}
+                onChange={(e) => setGuestName(e.target.value)}
+                placeholder="Ex. Camille & Théo Martin"
+                className={INPUT_CLASS}
+              />
+            </div>
+          </div>
+        )}
+
+        {step.kind === 'group' && (
+          <div className="mx-auto max-w-[380px]">
+            {step.title && (
+              <div className="mb-6 text-center">
+                <h3 className="font-body text-[21px] text-ink">{step.title}</h3>
+                <div className="mx-auto mt-2 h-px w-10 bg-gold/50" />
+                {step.help && (
+                  <p className="mx-auto mt-3 max-w-[320px] font-body text-[13px] text-muted">
+                    {step.help}
+                  </p>
+                )}
               </div>
             )}
-            {rsvpFields.askHeadcount && attending !== 'no' && (
-              <div>
-                <label className="mb-2 block font-body text-[11px] uppercase tracking-[0.14em] text-olive">
-                  Nombre de personnes
-                </label>
-                <div className="flex items-center gap-4">
-                  <StepperButton onClick={() => setHeadcount((h) => Math.max(1, h - 1))} label="−" />
-                  <span className="min-w-[34px] text-center font-body text-[26px] text-ink">
-                    {headcount}
-                  </span>
-                  <StepperButton
-                    onClick={() => setHeadcount((h) => Math.min(maxHead, h + 1))}
-                    label="+"
-                  />
+            <div className="flex flex-col gap-7">
+              {step.questions.filter(isVisible).map((q) => (
+                <div key={q.id}>
+                  {q.type !== 'moments' && q.type !== 'headcount' ? (
+                    <label className={LABEL_CLASS}>
+                      {q.label}
+                      {q.required && <span className="text-gold"> *</span>}
+                    </label>
+                  ) : (
+                    <p className="mb-3 font-body text-[15px] text-ink">{q.label}</p>
+                  )}
+                  {q.help && (
+                    <p className="-mt-1 mb-2.5 font-body text-[12px] text-muted">{q.help}</p>
+                  )}
+                  {renderQuestion(q, {
+                    moments,
+                    headcount,
+                    perMoment,
+                    answer: answers[q.id],
+                    setHeadcount,
+                    toggleMoment,
+                    onAnswer: (v) => setAnswer(q.id, v),
+                  })}
                 </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {stepKey === 'moments' && (
-          <div className="mx-auto max-w-[360px]">
-            <p className="mb-4 text-center font-body text-[16px] text-muted">
-              À quels moments serez-vous présents ?
-            </p>
-            <div className="flex flex-col gap-2.5">
-              {moments.map((m) => {
-                const on = !!perMoment[m.id];
-                return (
-                  <button
-                    key={m.id}
-                    onClick={() => toggleMoment(m.id)}
-                    className={clsx(
-                      'flex items-center justify-between gap-3 rounded-[10px] border-[1.5px] px-4 py-3.5 text-left font-body text-[16px] text-ink transition-colors',
-                      on ? 'border-gold bg-accent-soft' : 'border-line bg-surface',
-                    )}
-                  >
-                    <span>{m.title}</span>
-                    <span className="text-[15px] text-olive">{on ? '✓' : ''}</span>
-                  </button>
-                );
-              })}
+              ))}
             </div>
-          </div>
-        )}
-
-        {stepKey === 'dietary' && (
-          <div className="mx-auto max-w-[360px]">
-            <label className="mb-3.5 block text-center font-body text-[11px] uppercase tracking-[0.14em] text-olive">
-              Régime alimentaire / allergies
-            </label>
-            <div className="mb-3.5 flex flex-wrap justify-center gap-2">
-              {DIET_CHIPS.map((c) => {
-                const on = dietPick === c;
-                return (
-                  <button
-                    key={c}
-                    onClick={() => pickDiet(c)}
-                    className={clsx(
-                      'rounded-full border px-3.5 py-2 font-body text-[14px] text-ink transition-colors',
-                      on ? 'border-gold bg-accent-soft' : 'border-line bg-transparent',
-                    )}
-                  >
-                    {c}
-                  </button>
-                );
-              })}
-            </div>
-            <input
-              value={dietary}
-              onChange={(e) => setDietary(e.target.value)}
-              placeholder="Précisez si besoin…"
-              className="w-full rounded-[9px] border border-line bg-surface px-3.5 py-3 font-body text-[16px] text-ink outline-none focus:border-olive"
-            />
-          </div>
-        )}
-
-        {stepKey === 'message' && (
-          <div className="mx-auto max-w-[360px]">
-            <label className="mb-3 block text-center font-body text-[11px] uppercase tracking-[0.14em] text-olive">
-              Un petit mot pour les mariés
-            </label>
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Optionnel…"
-              rows={4}
-              className="w-full resize-none rounded-[9px] border border-line bg-surface px-3.5 py-3 font-body text-[16px] text-ink outline-none focus:border-olive"
-            />
           </div>
         )}
       </div>
@@ -421,9 +447,9 @@ export function RsvpForm({
       )}
 
       <div className="mt-7 flex justify-center gap-3">
-        {stepIndex > 0 && (
+        {clampedIndex > 0 && (
           <button
-            onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
+            onClick={() => setStepIndex(Math.max(0, clampedIndex - 1))}
             className="rounded-[9px] border border-line bg-transparent px-6 py-3 font-body text-[13px] uppercase tracking-[0.14em] text-olive"
           >
             Retour
@@ -441,6 +467,178 @@ export function RsvpForm({
         </button>
       </div>
     </div>
+  );
+}
+
+// ── Rendu d'une question selon son type ──────────────────────────
+function renderQuestion(
+  q: RsvpQuestion,
+  ctx: {
+    moments: Moment[];
+    headcount: number;
+    perMoment: Record<string, boolean>;
+    answer: RsvpAnswerValue | undefined;
+    setHeadcount: (fn: (h: number) => number) => void;
+    toggleMoment: (id: string) => void;
+    onAnswer: (v: RsvpAnswerValue) => void;
+  },
+) {
+  const str = typeof ctx.answer === 'string' ? ctx.answer : '';
+  const arr = Array.isArray(ctx.answer) ? ctx.answer : [];
+
+  switch (q.type) {
+    case 'section':
+      return null; // séparateur d'étape : consommé comme titre de groupe, pas rendu ici
+    case 'long_text':
+      return (
+        <textarea
+          value={str}
+          onChange={(e) => ctx.onAnswer(e.target.value)}
+          rows={4}
+          placeholder="Votre réponse…"
+          className={`${INPUT_CLASS} resize-none`}
+        />
+      );
+    case 'number':
+      return (
+        <input
+          type="number"
+          value={str}
+          min={q.min}
+          max={q.max}
+          onChange={(e) => ctx.onAnswer(e.target.value)}
+          placeholder="0"
+          className={INPUT_CLASS}
+        />
+      );
+    case 'date':
+      return <DateField value={str} onChange={(v) => ctx.onAnswer(v)} />;
+    case 'time':
+      return <TimeField value={str} onChange={(v) => ctx.onAnswer(v)} />;
+    case 'date_range':
+      return <DateRangeField value={arr} onChange={(v) => ctx.onAnswer(v)} />;
+    case 'yes_no':
+      return (
+        <div className="flex gap-2">
+          {['Oui', 'Non'].map((opt) => (
+            <Chip key={opt} active={str === opt} onClick={() => ctx.onAnswer(opt)}>
+              {opt}
+            </Chip>
+          ))}
+        </div>
+      );
+    case 'single_choice':
+      return (
+        <div className="flex flex-wrap gap-2">
+          {(q.options ?? []).map((opt) => (
+            <Chip key={opt} active={str === opt} onClick={() => ctx.onAnswer(opt)}>
+              {opt}
+            </Chip>
+          ))}
+        </div>
+      );
+    case 'multi_choice':
+      return (
+        <div className="flex flex-col gap-2.5">
+          {(q.options ?? []).map((opt) => {
+            const on = arr.includes(opt);
+            return (
+              <Toggle
+                key={opt}
+                active={on}
+                onClick={() =>
+                  ctx.onAnswer(on ? arr.filter((x) => x !== opt) : [...arr, opt])
+                }
+              >
+                {opt}
+              </Toggle>
+            );
+          })}
+        </div>
+      );
+    case 'headcount':
+      return (
+        <div className="flex items-center gap-4">
+          <StepperButton onClick={() => ctx.setHeadcount((h) => Math.max(q.min ?? 1, h - 1))} label="−" />
+          <span className="min-w-[34px] text-center font-body text-[26px] text-ink">
+            {ctx.headcount}
+          </span>
+          <StepperButton
+            onClick={() => ctx.setHeadcount((h) => Math.min(q.max ?? 20, h + 1))}
+            label="+"
+          />
+        </div>
+      );
+    case 'moments':
+      return (
+        <div className="flex flex-col gap-2.5">
+          {ctx.moments.map((m) => {
+            const on = !!ctx.perMoment[m.id];
+            return (
+              <Toggle key={m.id} active={on} onClick={() => ctx.toggleMoment(m.id)}>
+                {m.title}
+              </Toggle>
+            );
+          })}
+        </div>
+      );
+    case 'short_text':
+    default:
+      return (
+        <input
+          value={str}
+          onChange={(e) => ctx.onAnswer(e.target.value)}
+          placeholder="Votre réponse…"
+          className={INPUT_CLASS}
+        />
+      );
+  }
+}
+
+function Chip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={clsx(
+        'rounded-full border px-4 py-2 font-body text-[14px] text-ink transition-colors',
+        active ? 'border-gold bg-accent-soft' : 'border-line bg-transparent',
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Toggle({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={clsx(
+        'flex items-center justify-between gap-3 rounded-[10px] border-[1.5px] px-4 py-3.5 text-left font-body text-[16px] text-ink transition-colors',
+        active ? 'border-gold bg-accent-soft' : 'border-line bg-surface',
+      )}
+    >
+      <span>{children}</span>
+      <span className="text-[15px] text-olive">{active ? '✓' : ''}</span>
+    </button>
   );
 }
 
@@ -469,6 +667,7 @@ function ChoiceButton({
 function StepperButton({ onClick, label }: { onClick: () => void; label: string }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className="flex h-11 w-11 items-center justify-center rounded-full border border-line bg-surface text-[20px] text-olive"
       aria-label={label === '+' ? 'Augmenter' : 'Diminuer'}

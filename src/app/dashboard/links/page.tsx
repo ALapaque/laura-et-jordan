@@ -23,11 +23,5 @@ export default async function LinksPage() {
         .join(' · ') || 'Aucun moment',
   }));
 
-  return (
-    <LinksManager
-      parcours={view}
-      moments={moments.map((m) => ({ id: m.id, title: m.title }))}
-      siteUrl={process.env.NEXT_PUBLIC_SITE_URL ?? ''}
-    />
-  );
+  return <LinksManager parcours={view} siteUrl={process.env.NEXT_PUBLIC_SITE_URL ?? ''} />;
 }

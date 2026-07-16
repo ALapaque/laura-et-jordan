@@ -10,7 +10,7 @@ import {
   timestamp,
   uuid,
 } from 'drizzle-orm/pg-core';
-import type { RsvpFields } from '@/lib/types';
+import type { RsvpAnswerValue, RsvpFields, RsvpQuestion } from '@/lib/types';
 
 /**
  * Tables applicatives (schéma `public`), gérées par Drizzle.
@@ -116,6 +116,7 @@ export const parcours = pgTable('parcours', {
     .notNull()
     .default(sql`'{}'`),
   rsvpFields: jsonb('rsvp_fields').$type<RsvpFields>(),
+  formQuestions: jsonb('form_questions').$type<RsvpQuestion[]>(),
   introOverride: text('intro_override'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -131,6 +132,7 @@ export const rsvpResponse = pgTable('rsvp_response', {
   perMoment: jsonb('per_moment').$type<Record<string, boolean>>().notNull().default({}),
   dietary: text('dietary'),
   message: text('message'),
+  answers: jsonb('answers').$type<Record<string, RsvpAnswerValue>>(),
   locale: text('locale').notNull().default('fr'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   ipHash: text('ip_hash'),

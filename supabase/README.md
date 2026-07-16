@@ -11,11 +11,15 @@ Dans Supabase → **SQL Editor** → **New query**, colle et exécute dans l'ord
 3. [`03_detail_cards.sql`](./03_detail_cards.sql) — active la gestion des cartes « Détails pratiques » (texte + photo) depuis le dashboard. **Recommandé** (idempotent).
 4. [`04_moment_media.sql`](./04_moment_media.sql) — active les **galeries multi-photos** par moment (Dashboard → Moments). **Recommandé** (idempotent).
 5. [`05_rsvp_email.sql`](./05_rsvp_email.sql) — ajoute l'**email** des invités : permet à un invité de retrouver et modifier sa réponse. **Recommandé** (idempotent).
+6. [`06_gallery.sql`](./06_gallery.sql) — active la **galerie de photos** du couple (album libre, Dashboard → Galerie). **Recommandé** (idempotent).
+7. [`07_dynamic_form.sql`](./07_dynamic_form.sql) — active le **formulaire RSVP dynamique par parcours** (questions personnalisées, types de champ, étapes nommées). **Recommandé** (idempotent).
 
 > Sans le seed, l'app démarre vide : tu crées tes moments et tes parcours directement depuis le **dashboard**.
 > Sans `03_detail_cards.sql`, l'invitation affiche des cartes « Détails pratiques » par défaut (texte seul, non éditables) — rien ne casse.
 > Sans `04_moment_media.sql`, chaque moment garde sa photo unique existante ; l'ajout de plusieurs photos est désactivé — rien ne casse.
 > Sans `05_rsvp_email.sql`, l'email saisi par l'invité n'est pas stocké et « modifier ma réponse » ne retrouve rien — rien ne casse (le reste de la réponse est bien enregistré).
+> Sans `06_gallery.sql`, la galerie de photos du couple est indisponible dans le dashboard — rien ne casse.
+> Sans `07_dynamic_form.sql`, chaque parcours affiche le **formulaire par défaut** et les réponses aux questions personnalisées ne sont pas enregistrées — rien ne casse.
 
 ## 2. Compte des mariés (Authentication)
 
@@ -45,6 +49,23 @@ IP_HASH_SALT=...                            # une longue chaîne aléatoire
 
 Dès que ces variables sont présentes, le site quitte le mode démo : il lit/écrit dans ta base
 Supabase, `/login` authentifie le couple, et le dashboard pilote tout.
+
+## 5. Déploiement après un merge (mise à jour du site)
+
+Le site est déployé sur **Vercel**, branché sur le dépôt GitHub :
+
+1. **Code — automatique.** Merger une PR dans `main` déclenche **tout seul** un déploiement
+   de production. Rien à lancer.
+2. **Base de données — seulement si la PR ajoute un script `NN_*.sql`.** Lance-le **une fois**
+   dans Supabase → **SQL Editor** (comme au §1). Les scripts sont additifs et idempotents :
+   sûrs à lancer **avant** ou après le merge (idéalement juste avant, pour que tout marche dès
+   le déploiement).
+3. **Variables d'environnement — rien à changer** (déjà configurées).
+
+> Exemple (PR « formulaire dynamique ») : après le merge, lance
+> [`07_dynamic_form.sql`](./07_dynamic_form.sql) une fois. Tant qu'il n'est pas lancé, le
+> formulaire reste sur les questions par défaut et les réponses personnalisées ne sont pas
+> stockées — rien ne casse.
 
 ## Repartir de zéro (réinitialiser les données)
 

@@ -17,6 +17,7 @@ export const rsvpInputSchema = z
     attending: attendingSchema,
     headcount: z.number().int().min(0).max(20).default(1),
     perMoment: z.record(z.string(), z.boolean()).default({}),
+    answers: z.record(z.string(), z.union([z.string(), z.array(z.string())])).default({}),
     dietary: z.string().max(500).default(''),
     message: z.string().max(2000).default(''),
     locale: z.enum(['fr', 'nl']).default('fr'),

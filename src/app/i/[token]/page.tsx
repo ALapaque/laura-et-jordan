@@ -86,7 +86,7 @@ export default async function InvitationPage({ params, searchParams }: PageProps
             <RsvpForm
               token={parcours.token}
               moments={moments}
-              rsvpFields={parcours.rsvpFields}
+              questions={parcours.formQuestions}
               deadline={wedding.rsvpDeadline}
               locale={locale}
             />
