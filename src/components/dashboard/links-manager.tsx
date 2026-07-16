@@ -1,14 +1,9 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import Link from 'next/link';
 import { clsx } from 'clsx';
-import {
-  createParcoursAction,
-  deleteParcoursAction,
-  updateParcoursAction,
-} from '@/app/dashboard/links/actions';
-import { QuestionBuilder } from '@/components/dashboard/question-builder';
-import { DEFAULT_QUESTIONS, type RsvpQuestion } from '@/lib/types';
+import { deleteParcoursAction } from '@/app/dashboard/links/actions';
 
 interface ParcoursView {
   id: string;
@@ -16,21 +11,15 @@ interface ParcoursView {
   token: string;
   responses: number;
   momentsLabel: string;
-  visibleMomentIds: string[];
-  formQuestions: RsvpQuestion[];
 }
 
 export function LinksManager({
   parcours,
-  moments,
   siteUrl,
 }: {
   parcours: ParcoursView[];
-  moments: { id: string; title: string }[];
   siteUrl: string;
 }) {
-  const [createOpen, setCreateOpen] = useState(false);
-  const [editing, setEditing] = useState<ParcoursView | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -54,12 +43,12 @@ export function LinksManager({
         <p className="m-0 font-body text-[15px] italic text-muted">
           Chaque invité reçoit un lien qui n'affiche que ses moments et son formulaire.
         </p>
-        <button
-          onClick={() => setCreateOpen(true)}
+        <Link
+          href="/dashboard/links/new"
           className="rounded-[9px] border-none bg-olive px-5 py-2.5 font-body text-[13px] uppercase tracking-[0.12em] text-panel transition-colors hover:bg-ink"
         >
           + Nouveau parcours
-        </button>
+        </Link>
       </div>
 
       <div className="overflow-hidden rounded-[14px] border border-line bg-surface">
@@ -98,12 +87,12 @@ export function LinksManager({
               >
                 {copiedToken === p.token ? 'Copié ✓' : 'Copier'}
               </button>
-              <button
-                onClick={() => setEditing(p)}
+              <Link
+                href={`/dashboard/links/${p.id}`}
                 className="rounded-[7px] border border-line px-3.5 py-2 font-body text-[11px] uppercase tracking-[0.1em] text-olive transition-colors hover:bg-panel"
               >
                 Éditer
-              </button>
+              </Link>
               <a
                 href={`${base}/i/${p.token}`}
                 target="_blank"
@@ -122,135 +111,6 @@ export function LinksManager({
             </div>
           </div>
         ))}
-      </div>
-
-      {createOpen && (
-        <ParcoursModal moments={moments} onClose={() => setCreateOpen(false)} />
-      )}
-      {editing && (
-        <ParcoursModal moments={moments} initial={editing} onClose={() => setEditing(null)} />
-      )}
-    </div>
-  );
-}
-
-function ParcoursModal({
-  moments,
-  initial,
-  onClose,
-}: {
-  moments: { id: string; title: string }[];
-  initial?: ParcoursView;
-  onClose: () => void;
-}) {
-  const isEdit = !!initial;
-  const [name, setName] = useState(initial?.name ?? '');
-  const [selected, setSelected] = useState<Set<string>>(
-    new Set(initial?.visibleMomentIds ?? moments.map((m) => m.id)),
-  );
-  const [questions, setQuestions] = useState<RsvpQuestion[]>(
-    initial?.formQuestions ?? DEFAULT_QUESTIONS.map((q) => ({ ...q })),
-  );
-  const [pending, startTransition] = useTransition();
-
-  function toggle(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function submit() {
-    const momentIds = moments.filter((m) => selected.has(m.id)).map((m) => m.id);
-    startTransition(async () => {
-      if (isEdit && initial) {
-        await updateParcoursAction(initial.id, { name, momentIds, formQuestions: questions });
-      } else {
-        await createParcoursAction({ name, momentIds, formQuestions: questions });
-      }
-      onClose();
-    });
-  }
-
-  return (
-    <div
-      onClick={onClose}
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-ink/40 p-5 backdrop-blur-[3px]"
-      style={{ animation: 'jlFadeIn .2s ease' }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="max-h-[90vh] w-[min(94vw,560px)] overflow-y-auto rounded-2xl bg-panel p-[30px] shadow-[0_24px_60px_rgba(64,57,42,0.3)]"
-      >
-        <div className="mb-1 font-display text-[34px] text-ink">
-          {isEdit ? 'Modifier le parcours' : 'Nouveau parcours'}
-        </div>
-        <p className="mb-[22px] font-body text-[14px] text-muted">
-          {isEdit
-            ? 'Modifiez le nom, les moments visibles et le formulaire.'
-            : 'Un lien unique sera généré automatiquement.'}
-        </p>
-
-        <label className="mb-1.5 block font-body text-[10px] uppercase tracking-[0.12em] text-sage">
-          Nom du parcours
-        </label>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Ex. Famille proche"
-          className="mb-[18px] w-full rounded-lg border border-line bg-surface px-3.5 py-3 font-body text-[15px] text-ink outline-none focus:border-olive"
-        />
-
-        <label className="mb-2.5 block font-body text-[10px] uppercase tracking-[0.12em] text-sage">
-          Moments visibles
-        </label>
-        <div className="mb-[26px] flex flex-wrap gap-2">
-          {moments.map((m) => {
-            const on = selected.has(m.id);
-            return (
-              <button
-                key={m.id}
-                onClick={() => toggle(m.id)}
-                className={clsx(
-                  'rounded-full border px-3.5 py-2 font-body text-[13px] transition-colors',
-                  on ? 'border-gold bg-accent-soft text-ink' : 'border-line bg-transparent text-muted',
-                )}
-              >
-                {m.title}
-              </button>
-            );
-          })}
-          {moments.length === 0 && (
-            <span className="font-body text-[13px] italic text-muted">Aucun moment créé.</span>
-          )}
-        </div>
-
-        <label className="mb-2.5 block font-body text-[10px] uppercase tracking-[0.12em] text-sage">
-          Formulaire de réponse
-        </label>
-        <p className="mb-3 font-body text-[13px] text-muted">
-          Nom, email et présence sont toujours demandés. Ajoutez vos questions ci-dessous
-          <span className="text-sage"> — ★ = champs spéciaux (stats).</span>
-        </p>
-        <QuestionBuilder value={questions} onChange={setQuestions} />
-
-        <div className="mt-[26px] flex justify-end gap-2.5">
-          <button
-            onClick={onClose}
-            className="rounded-lg border border-line bg-transparent px-5 py-2.5 font-body text-[12px] uppercase tracking-[0.12em] text-olive"
-          >
-            Annuler
-          </button>
-          <button
-            onClick={submit}
-            disabled={pending}
-            className="rounded-lg border-none bg-olive px-5 py-2.5 font-body text-[12px] uppercase tracking-[0.12em] text-panel transition-colors hover:bg-ink disabled:opacity-50"
-          >
-            {pending ? 'Enregistrement…' : isEdit ? 'Enregistrer' : 'Créer le lien'}
-          </button>
-        </div>
       </div>
     </div>
   );
