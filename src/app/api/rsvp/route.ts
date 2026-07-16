@@ -48,6 +48,21 @@ export async function POST(request: Request) {
     if (value && visible.has(key)) perMoment[key] = true;
   }
 
+  // Réponses dynamiques : on ne garde que les questions génériques réellement définies
+  // pour ce parcours (les spéciaux headcount/moments vont dans leurs colonnes), et rien
+  // si l'invité décline (l'étape questions est alors sautée).
+  const genericQuestionIds = new Set(
+    invitation.parcours.formQuestions
+      .filter((q) => q.type !== 'headcount' && q.type !== 'moments')
+      .map((q) => q.id),
+  );
+  const answers: Record<string, string | string[]> = {};
+  if (input.attending !== 'no') {
+    for (const [k, v] of Object.entries(input.answers)) {
+      if (genericQuestionIds.has(k)) answers[k] = v;
+    }
+  }
+
   let saved;
   try {
     saved = await saveRsvp({
@@ -59,6 +74,7 @@ export async function POST(request: Request) {
       perMoment,
       dietary: input.dietary.trim() || null,
       message: input.message.trim() || null,
+      answers,
       locale: input.locale,
       ipHash,
     });

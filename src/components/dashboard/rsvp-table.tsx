@@ -5,7 +5,7 @@ import { clsx } from 'clsx';
 import { deleteResponseAction, updateResponseAction } from '@/app/dashboard/rsvp/actions';
 import { StatusBadge } from '@/components/dashboard/status-badge';
 import { shortDate } from '@/lib/format';
-import type { Attending, RsvpResponse } from '@/lib/types';
+import type { Attending, RsvpAnswerValue, RsvpQuestion, RsvpResponse } from '@/lib/types';
 
 type Filter = 'all' | Attending;
 
@@ -25,9 +25,11 @@ const ATTENDING_OPTS: { id: Attending; label: string }[] = [
 export function RsvpTable({
   responses,
   moments,
+  questionsByParcours = {},
 }: {
   responses: RsvpResponse[];
   moments: { id: string; title: string }[];
+  questionsByParcours?: Record<string, RsvpQuestion[]>;
 }) {
   const [items, setItems] = useState<RsvpResponse[]>(responses);
   const [filter, setFilter] = useState<Filter>('all');
@@ -159,6 +161,13 @@ export function RsvpTable({
           const attended = Object.entries(r.perMoment)
             .filter(([, v]) => v)
             .map(([id]) => momentTitles[id] ?? id);
+          const pQuestions = questionsByParcours[r.parcoursId] ?? [];
+          const answerRows = Object.entries(r.answers)
+            .map(([qid, val]) => {
+              const q = pQuestions.find((x) => x.id === qid);
+              return { key: qid, label: q?.label ?? qid, value: formatAnswer(q, val) };
+            })
+            .filter((a) => a.value.trim() !== '');
           return (
             <div key={r.id} className="border-b border-line last:border-0">
               <button
@@ -180,11 +189,17 @@ export function RsvpTable({
                   <DetailRow label="Date de réponse" value={shortDate(r.createdAt)} />
                   {r.email && <DetailRow label="Email" value={r.email} />}
                   {attended.length > 0 && <DetailRow label="Moments" value={attended.join(' · ')} />}
+                  {answerRows.map((a) => (
+                    <DetailRow key={a.key} label={a.label} value={a.value} />
+                  ))}
                   {r.dietary && <DetailRow label="Régime / allergies" value={r.dietary} />}
                   {r.message && <DetailRow label="Petit mot" value={`« ${r.message} »`} />}
-                  {!r.dietary && !r.message && attended.length === 0 && (
-                    <span className="italic">Aucun détail supplémentaire.</span>
-                  )}
+                  {!r.dietary &&
+                    !r.message &&
+                    attended.length === 0 &&
+                    answerRows.length === 0 && (
+                      <span className="italic">Aucun détail supplémentaire.</span>
+                    )}
                   <div>
                     <button
                       onClick={() => setEditingId(r.id)}
@@ -389,6 +404,24 @@ function StepBtn({ onClick, label }: { onClick: () => void; label: string }) {
       {label}
     </button>
   );
+}
+
+/** Formate une réponse dynamique pour l'affichage (dates, plages, choix multiples). */
+function fmtDate(s: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
+}
+function formatAnswer(q: RsvpQuestion | undefined, value: RsvpAnswerValue): string {
+  if (Array.isArray(value)) {
+    if (q?.type === 'date_range') {
+      const [a, b] = value;
+      if (a && b) return `du ${fmtDate(a)} au ${fmtDate(b)}`;
+      return a ? fmtDate(a) : b ? fmtDate(b) : '';
+    }
+    return value.join(', ');
+  }
+  if (q?.type === 'date') return fmtDate(value);
+  return value;
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {

@@ -25,6 +25,50 @@ export const DEFAULT_RSVP_FIELDS: RsvpFields = {
   maxHeadcount: 12,
 };
 
+// ── Formulaire dynamique par parcours ────────────────────────────
+export type RsvpQuestionType =
+  | 'short_text'
+  | 'long_text'
+  | 'single_choice'
+  | 'multi_choice'
+  | 'yes_no'
+  | 'number'
+  | 'date'
+  | 'date_range'
+  | 'time'
+  | 'headcount' // spécial → colonne `headcount` (stat des présents)
+  | 'moments'; // spécial → colonne `per_moment` (filtre par moment)
+
+export interface RsvpQuestion {
+  id: string;
+  label: string;
+  type: RsvpQuestionType;
+  /** Options pour `single_choice` / `multi_choice`. */
+  options?: string[];
+  required?: boolean;
+  /** Texte d'aide affiché sous le libellé. */
+  help?: string;
+  /** Bornes pour le type `number`. */
+  min?: number;
+  max?: number;
+  /** Conditionnel : afficher seulement si la réponse à `questionId` vaut (ou contient) `value`. */
+  showIf?: { questionId: string; value: string };
+}
+
+/** Réponse générique : chaîne (texte/date/heure/choix unique) ou tableau (multi-choix / plage de dates). */
+export type RsvpAnswerValue = string | string[];
+
+/**
+ * Formulaire par défaut — parcours créés avant la fonctionnalité (ou sans questions).
+ * Reproduit le formulaire historique : nombre de personnes, moments, régime, petit mot.
+ */
+export const DEFAULT_QUESTIONS: RsvpQuestion[] = [
+  { id: 'headcount', label: 'Nombre de personnes', type: 'headcount' },
+  { id: 'moments', label: 'À quels moments serez-vous présents ?', type: 'moments' },
+  { id: 'dietary', label: 'Régime alimentaire / allergies', type: 'short_text' },
+  { id: 'message', label: 'Un petit mot pour les mariés', type: 'long_text' },
+];
+
 export interface DetailCard {
   id: string;
   label: string;
@@ -74,6 +118,8 @@ export interface Parcours {
   name: string;
   visibleMomentIds: string[];
   rsvpFields: RsvpFields;
+  /** Formulaire RSVP dynamique (questions ordonnées). Défaut si le parcours n'en a pas. */
+  formQuestions: RsvpQuestion[];
   introOverride: string | null;
   createdAt: string;
 }
@@ -89,6 +135,8 @@ export interface RsvpResponse {
   perMoment: Record<string, boolean>;
   dietary: string | null;
   message: string | null;
+  /** Réponses aux questions dynamiques du parcours (clé = id de la question). */
+  answers: Record<string, RsvpAnswerValue>;
   locale: string;
   createdAt: string;
 }
@@ -102,4 +150,5 @@ export interface RsvpPrefill {
   perMoment: Record<string, boolean>;
   dietary: string;
   message: string;
+  answers: Record<string, RsvpAnswerValue>;
 }

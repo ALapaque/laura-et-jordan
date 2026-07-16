@@ -2,7 +2,13 @@
 
 import { useState, useTransition } from 'react';
 import { clsx } from 'clsx';
-import { createParcoursAction, deleteParcoursAction } from '@/app/dashboard/links/actions';
+import {
+  createParcoursAction,
+  deleteParcoursAction,
+  updateParcoursAction,
+} from '@/app/dashboard/links/actions';
+import { QuestionBuilder } from '@/components/dashboard/question-builder';
+import { DEFAULT_QUESTIONS, type RsvpQuestion } from '@/lib/types';
 
 interface ParcoursView {
   id: string;
@@ -10,6 +16,8 @@ interface ParcoursView {
   token: string;
   responses: number;
   momentsLabel: string;
+  visibleMomentIds: string[];
+  formQuestions: RsvpQuestion[];
 }
 
 export function LinksManager({
@@ -22,6 +30,7 @@ export function LinksManager({
   siteUrl: string;
 }) {
   const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<ParcoursView | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -43,7 +52,7 @@ export function LinksManager({
     <div style={{ animation: 'jlFadeIn .3s ease' }}>
       <div className="mb-[18px] flex flex-wrap items-center justify-between gap-3">
         <p className="m-0 font-body text-[15px] italic text-muted">
-          Chaque invité reçoit un lien qui n'affiche que ses moments.
+          Chaque invité reçoit un lien qui n'affiche que ses moments et son formulaire.
         </p>
         <button
           onClick={() => setCreateOpen(true)}
@@ -89,6 +98,12 @@ export function LinksManager({
               >
                 {copiedToken === p.token ? 'Copié ✓' : 'Copier'}
               </button>
+              <button
+                onClick={() => setEditing(p)}
+                className="rounded-[7px] border border-line px-3.5 py-2 font-body text-[11px] uppercase tracking-[0.1em] text-olive transition-colors hover:bg-panel"
+              >
+                Éditer
+              </button>
               <a
                 href={`${base}/i/${p.token}`}
                 target="_blank"
@@ -110,27 +125,32 @@ export function LinksManager({
       </div>
 
       {createOpen && (
-        <CreateModal
-          moments={moments}
-          onClose={() => setCreateOpen(false)}
-          onCreated={() => setCreateOpen(false)}
-        />
+        <ParcoursModal moments={moments} onClose={() => setCreateOpen(false)} />
+      )}
+      {editing && (
+        <ParcoursModal moments={moments} initial={editing} onClose={() => setEditing(null)} />
       )}
     </div>
   );
 }
 
-function CreateModal({
+function ParcoursModal({
   moments,
+  initial,
   onClose,
-  onCreated,
 }: {
   moments: { id: string; title: string }[];
+  initial?: ParcoursView;
   onClose: () => void;
-  onCreated: () => void;
 }) {
-  const [name, setName] = useState('');
-  const [selected, setSelected] = useState<Set<string>>(new Set(moments.map((m) => m.id)));
+  const isEdit = !!initial;
+  const [name, setName] = useState(initial?.name ?? '');
+  const [selected, setSelected] = useState<Set<string>>(
+    new Set(initial?.visibleMomentIds ?? moments.map((m) => m.id)),
+  );
+  const [questions, setQuestions] = useState<RsvpQuestion[]>(
+    initial?.formQuestions ?? DEFAULT_QUESTIONS.map((q) => ({ ...q })),
+  );
   const [pending, startTransition] = useTransition();
 
   function toggle(id: string) {
@@ -143,9 +163,14 @@ function CreateModal({
   }
 
   function submit() {
+    const momentIds = moments.filter((m) => selected.has(m.id)).map((m) => m.id);
     startTransition(async () => {
-      await createParcoursAction({ name, momentIds: moments.filter((m) => selected.has(m.id)).map((m) => m.id) });
-      onCreated();
+      if (isEdit && initial) {
+        await updateParcoursAction(initial.id, { name, momentIds, formQuestions: questions });
+      } else {
+        await createParcoursAction({ name, momentIds, formQuestions: questions });
+      }
+      onClose();
     });
   }
 
@@ -157,11 +182,15 @@ function CreateModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-[min(94vw,460px)] rounded-2xl bg-panel p-[30px] shadow-[0_24px_60px_rgba(64,57,42,0.3)]"
+        className="max-h-[90vh] w-[min(94vw,560px)] overflow-y-auto rounded-2xl bg-panel p-[30px] shadow-[0_24px_60px_rgba(64,57,42,0.3)]"
       >
-        <div className="mb-1 font-display text-[34px] text-ink">Nouveau parcours</div>
+        <div className="mb-1 font-display text-[34px] text-ink">
+          {isEdit ? 'Modifier le parcours' : 'Nouveau parcours'}
+        </div>
         <p className="mb-[22px] font-body text-[14px] text-muted">
-          Un lien unique sera généré automatiquement.
+          {isEdit
+            ? 'Modifiez le nom, les moments visibles et le formulaire.'
+            : 'Un lien unique sera généré automatiquement.'}
         </p>
 
         <label className="mb-1.5 block font-body text-[10px] uppercase tracking-[0.12em] text-sage">
@@ -193,9 +222,21 @@ function CreateModal({
               </button>
             );
           })}
+          {moments.length === 0 && (
+            <span className="font-body text-[13px] italic text-muted">Aucun moment créé.</span>
+          )}
         </div>
 
-        <div className="flex justify-end gap-2.5">
+        <label className="mb-2.5 block font-body text-[10px] uppercase tracking-[0.12em] text-sage">
+          Formulaire de réponse
+        </label>
+        <p className="mb-3 font-body text-[13px] text-muted">
+          Nom, email et présence sont toujours demandés. Ajoutez vos questions ci-dessous
+          <span className="text-sage"> — ★ = champs spéciaux (stats).</span>
+        </p>
+        <QuestionBuilder value={questions} onChange={setQuestions} />
+
+        <div className="mt-[26px] flex justify-end gap-2.5">
           <button
             onClick={onClose}
             className="rounded-lg border border-line bg-transparent px-5 py-2.5 font-body text-[12px] uppercase tracking-[0.12em] text-olive"
@@ -207,7 +248,7 @@ function CreateModal({
             disabled={pending}
             className="rounded-lg border-none bg-olive px-5 py-2.5 font-body text-[12px] uppercase tracking-[0.12em] text-panel transition-colors hover:bg-ink disabled:opacity-50"
           >
-            {pending ? 'Création…' : 'Créer le lien'}
+            {pending ? 'Enregistrement…' : isEdit ? 'Enregistrer' : 'Créer le lien'}
           </button>
         </div>
       </div>

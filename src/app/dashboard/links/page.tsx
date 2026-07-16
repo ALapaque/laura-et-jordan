@@ -16,6 +16,8 @@ export default async function LinksPage() {
     name: p.name,
     token: p.token,
     responses: counts.get(p.id) ?? 0,
+    visibleMomentIds: p.visibleMomentIds,
+    formQuestions: p.formQuestions,
     momentsLabel:
       p.visibleMomentIds
         .map((id) => momentTitle.get(id))
