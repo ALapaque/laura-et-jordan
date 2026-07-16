@@ -29,6 +29,7 @@ import {
 } from '@/app/dashboard/moments/actions';
 import { momentLocation, momentTime } from '@/lib/format';
 import type { Moment, MomentAsset } from '@/lib/types';
+import { UPLOAD_HINT } from '@/lib/upload';
 
 export function MomentsEditor({ initial }: { initial: Moment[] }) {
   const [items, setItems] = useState<Moment[]>(initial);
@@ -304,6 +305,7 @@ function MomentForm({
             {uploading ? '…' : '+ Photo'}
           </button>
         </div>
+        <p className="mt-1.5 font-body text-[11px] text-sage">{UPLOAD_HINT}</p>
         {imgError && (
           <span className="mt-1.5 block font-body text-[12px] text-[#9a3b2e]">{imgError}</span>
         )}
