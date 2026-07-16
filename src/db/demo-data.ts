@@ -114,8 +114,10 @@ export const demoParcours: Parcours[] = [
     visibleMomentIds: ['ceremonie', 'apero', 'diner', 'soiree'],
     rsvpFields: { ...DEFAULT_RSVP_FIELDS },
     formQuestions: [
+      { id: 'sec-venue', label: 'Votre venue', type: 'section' },
       { id: 'headcount', label: 'Nombre de personnes', type: 'headcount' },
       { id: 'moments', label: 'À quels moments serez-vous présents ?', type: 'moments' },
+      { id: 'sec-repas', label: 'Le repas', type: 'section', help: 'Pour que tout le monde se régale.' },
       {
         id: 'menu',
         label: 'Choix du menu',
@@ -124,6 +126,7 @@ export const demoParcours: Parcours[] = [
         required: true,
       },
       { id: 'allergies', label: 'Allergies / régime particulier', type: 'short_text' },
+      { id: 'sec-gite', label: 'Le gîte', type: 'section', help: 'Un hébergement sur place est possible.' },
       { id: 'lodging', label: "Avez-vous besoin d'un hébergement ?", type: 'yes_no' },
       {
         id: 'stay',
@@ -132,6 +135,7 @@ export const demoParcours: Parcours[] = [
         help: 'Arrivée → départ.',
         showIf: { questionId: 'lodging', value: 'Oui' },
       },
+      { id: 'sec-fete', label: 'La fête', type: 'section' },
       { id: 'song', label: 'Une chanson à demander au DJ ?', type: 'short_text' },
       { id: 'message', label: 'Un petit mot pour les mariés', type: 'long_text' },
     ],

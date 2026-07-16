@@ -37,7 +37,8 @@ export type RsvpQuestionType =
   | 'date_range'
   | 'time'
   | 'headcount' // spécial → colonne `headcount` (stat des présents)
-  | 'moments'; // spécial → colonne `per_moment` (filtre par moment)
+  | 'moments' // spécial → colonne `per_moment` (filtre par moment)
+  | 'section'; // séparateur : démarre une nouvelle étape du formulaire (titre = `label`)
 
 export interface RsvpQuestion {
   id: string;

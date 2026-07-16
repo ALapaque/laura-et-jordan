@@ -53,7 +53,7 @@ export async function POST(request: Request) {
   // si l'invité décline (l'étape questions est alors sautée).
   const genericQuestionIds = new Set(
     invitation.parcours.formQuestions
-      .filter((q) => q.type !== 'headcount' && q.type !== 'moments')
+      .filter((q) => q.type !== 'headcount' && q.type !== 'moments' && q.type !== 'section')
       .map((q) => q.id),
   );
   const answers: Record<string, string | string[]> = {};

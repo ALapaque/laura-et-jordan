@@ -7,7 +7,10 @@ import { formatDeadline } from '@/lib/format';
 import { rsvpInputSchema } from '@/lib/rsvp-schema';
 import type { Attending, Moment, RsvpAnswerValue, RsvpQuestion } from '@/lib/types';
 
-type StepKey = 'presence' | 'names' | 'questions';
+type Step =
+  | { kind: 'presence' }
+  | { kind: 'names' }
+  | { kind: 'group'; title: string | null; help?: string; questions: RsvpQuestion[] };
 
 // Calendrier/heure shadcn (react-day-picker + Radix) chargés à la demande :
 // le bundle n'arrive que si le parcours contient réellement un champ date/heure.
@@ -33,14 +36,38 @@ const INPUT_CLASS =
   'w-full rounded-[9px] border border-line bg-surface px-3.5 py-3 font-body text-[16px] text-ink outline-none focus:border-olive';
 const LABEL_CLASS = 'mb-2 block font-body text-[11px] uppercase tracking-[0.14em] text-olive';
 
-// Étapes : présence + (nom/email) toujours ; l'étape « questions » n'apparaît que si
-// l'invité ne décline pas ET que le parcours a au moins une question.
+// Découpe les questions en groupes selon les séparateurs `section` :
+// chaque `section` démarre une nouvelle étape (son libellé en devient le titre).
+type QuestionGroup = { title: string | null; help?: string; questions: RsvpQuestion[] };
+function splitIntoGroups(questions: RsvpQuestion[]): QuestionGroup[] {
+  const groups: QuestionGroup[] = [];
+  let current: QuestionGroup = { title: null, questions: [] };
+  for (const q of questions) {
+    if (q.type === 'section') {
+      if (current.questions.length || current.title !== null) groups.push(current);
+      current = { title: q.label, help: q.help, questions: [] };
+    } else {
+      current.questions.push(q);
+    }
+  }
+  if (current.questions.length || current.title !== null) groups.push(current);
+  return groups;
+}
+
+// Étapes : présence + coordonnées (toujours), puis une étape par groupe de questions
+// ayant au moins une question visible (les groupes vides ou masqués sont sautés).
 function computeSteps(
   attending: Attending | null,
   questions: RsvpQuestion[],
-): StepKey[] {
-  const steps: StepKey[] = ['presence', 'names'];
-  if (attending !== 'no' && questions.length > 0) steps.push('questions');
+  isVisible: (q: RsvpQuestion) => boolean,
+): Step[] {
+  const steps: Step[] = [{ kind: 'presence' }, { kind: 'names' }];
+  if (attending === 'no') return steps;
+  for (const g of splitIntoGroups(questions)) {
+    if (g.questions.some(isVisible)) {
+      steps.push({ kind: 'group', title: g.title, help: g.help, questions: g.questions });
+    }
+  }
   return steps;
 }
 
@@ -89,10 +116,6 @@ export function RsvpForm({
     [questions],
   );
 
-  const steps = useMemo(() => computeSteps(attending, questions), [attending, questions]);
-  const stepKey = steps[Math.min(stepIndex, steps.length - 1)]!;
-  const isLast = stepIndex >= steps.length - 1;
-
   // Visibilité conditionnelle (showIf) évaluée sur les réponses courantes.
   function isVisible(q: RsvpQuestion): boolean {
     if (!q.showIf) return true;
@@ -100,21 +123,29 @@ export function RsvpForm({
     if (Array.isArray(dep)) return dep.includes(q.showIf.value);
     return dep === q.showIf.value;
   }
+
+  const steps = computeSteps(attending, questions, isVisible);
+  const clampedIndex = Math.min(stepIndex, steps.length - 1);
+  const step = steps[clampedIndex]!;
+  const isLast = clampedIndex >= steps.length - 1;
+
   const visibleQuestions = questions.filter(isVisible);
 
   function isAnswered(q: RsvpQuestion): boolean {
-    if (q.type === 'headcount' || q.type === 'moments') return true; // toujours une valeur / facultatif
+    if (q.type === 'headcount' || q.type === 'moments' || q.type === 'section') return true;
     const v = answers[q.id];
     if (Array.isArray(v)) return v.length > 0;
     return typeof v === 'string' && v.trim() !== '';
   }
-  const questionsValid = visibleQuestions.every((q) => !q.required || isAnswered(q));
 
   const emailValid = EMAIL_RE.test(email.trim());
-  const nextDisabled =
-    (stepKey === 'presence' && !attending) ||
-    (stepKey === 'names' && (!emailValid || (attending !== 'no' && guestName.trim() === ''))) ||
-    (stepKey === 'questions' && !questionsValid);
+  // Validation étape par étape : on ne peut avancer que si l'étape courante est complète.
+  function stepValid(s: Step): boolean {
+    if (s.kind === 'presence') return !!attending;
+    if (s.kind === 'names') return emailValid && (attending === 'no' || guestName.trim() !== '');
+    return s.questions.filter(isVisible).every((q) => !q.required || isAnswered(q));
+  }
+  const nextDisabled = !stepValid(step);
 
   function chooseAttending(value: Attending) {
     setAttending(value);
@@ -175,7 +206,7 @@ export function RsvpForm({
   async function advance() {
     if (nextDisabled) return;
     if (!isLast) {
-      setStepIndex((i) => i + 1);
+      setStepIndex(clampedIndex + 1);
       return;
     }
     await submit();
@@ -250,19 +281,23 @@ export function RsvpForm({
 
       {/* points d'étape */}
       <div className="mb-7 flex items-center justify-center gap-2">
-        {steps.map((key, i) => (
+        {steps.map((s, i) => (
           <span
-            key={key}
+            key={i}
             className={clsx(
               'h-1.5 rounded-full transition-all duration-300',
-              i === stepIndex ? 'w-6 bg-olive' : i < stepIndex ? 'w-1.5 bg-olive' : 'w-1.5 bg-olive/25',
+              i === clampedIndex
+                ? 'w-6 bg-olive'
+                : i < clampedIndex
+                  ? 'w-1.5 bg-olive'
+                  : 'w-1.5 bg-olive/25',
             )}
           />
         ))}
       </div>
 
       <div style={{ animation: 'jlFadeUp .4s ease both' }}>
-        {stepKey === 'presence' && (
+        {step.kind === 'presence' && (
           <div>
             <p className="mb-5 text-center font-body text-[18px] text-ink">
               Aurez-vous le plaisir de nous rejoindre ?
@@ -328,8 +363,12 @@ export function RsvpForm({
           </div>
         )}
 
-        {stepKey === 'names' && (
+        {step.kind === 'names' && (
           <div className="mx-auto flex max-w-[360px] flex-col gap-6">
+            <div className="text-center">
+              <h3 className="font-body text-[21px] text-ink">Vos coordonnées</h3>
+              <div className="mx-auto mt-2 h-px w-10 bg-gold/50" />
+            </div>
             <div>
               <label className={LABEL_CLASS}>Votre email</label>
               <input
@@ -358,30 +397,45 @@ export function RsvpForm({
           </div>
         )}
 
-        {stepKey === 'questions' && (
-          <div className="mx-auto flex max-w-[380px] flex-col gap-7">
-            {visibleQuestions.map((q) => (
-              <div key={q.id}>
-                {q.type !== 'moments' && q.type !== 'headcount' ? (
-                  <label className={LABEL_CLASS}>
-                    {q.label}
-                    {q.required && <span className="text-gold"> *</span>}
-                  </label>
-                ) : (
-                  <p className="mb-3 font-body text-[15px] text-ink">{q.label}</p>
+        {step.kind === 'group' && (
+          <div className="mx-auto max-w-[380px]">
+            {step.title && (
+              <div className="mb-6 text-center">
+                <h3 className="font-body text-[21px] text-ink">{step.title}</h3>
+                <div className="mx-auto mt-2 h-px w-10 bg-gold/50" />
+                {step.help && (
+                  <p className="mx-auto mt-3 max-w-[320px] font-body text-[13px] text-muted">
+                    {step.help}
+                  </p>
                 )}
-                {q.help && <p className="-mt-1 mb-2.5 font-body text-[12px] text-muted">{q.help}</p>}
-                {renderQuestion(q, {
-                  moments,
-                  headcount,
-                  perMoment,
-                  answer: answers[q.id],
-                  setHeadcount,
-                  toggleMoment,
-                  onAnswer: (v) => setAnswer(q.id, v),
-                })}
               </div>
-            ))}
+            )}
+            <div className="flex flex-col gap-7">
+              {step.questions.filter(isVisible).map((q) => (
+                <div key={q.id}>
+                  {q.type !== 'moments' && q.type !== 'headcount' ? (
+                    <label className={LABEL_CLASS}>
+                      {q.label}
+                      {q.required && <span className="text-gold"> *</span>}
+                    </label>
+                  ) : (
+                    <p className="mb-3 font-body text-[15px] text-ink">{q.label}</p>
+                  )}
+                  {q.help && (
+                    <p className="-mt-1 mb-2.5 font-body text-[12px] text-muted">{q.help}</p>
+                  )}
+                  {renderQuestion(q, {
+                    moments,
+                    headcount,
+                    perMoment,
+                    answer: answers[q.id],
+                    setHeadcount,
+                    toggleMoment,
+                    onAnswer: (v) => setAnswer(q.id, v),
+                  })}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -393,9 +447,9 @@ export function RsvpForm({
       )}
 
       <div className="mt-7 flex justify-center gap-3">
-        {stepIndex > 0 && (
+        {clampedIndex > 0 && (
           <button
-            onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
+            onClick={() => setStepIndex(Math.max(0, clampedIndex - 1))}
             className="rounded-[9px] border border-line bg-transparent px-6 py-3 font-body text-[13px] uppercase tracking-[0.14em] text-olive"
           >
             Retour
@@ -433,6 +487,8 @@ function renderQuestion(
   const arr = Array.isArray(ctx.answer) ? ctx.answer : [];
 
   switch (q.type) {
+    case 'section':
+      return null; // séparateur d'étape : consommé comme titre de groupe, pas rendu ici
     case 'long_text':
       return (
         <textarea

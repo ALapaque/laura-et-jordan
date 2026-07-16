@@ -44,6 +44,9 @@ export function QuestionBuilder({
   function add() {
     onChange([...value, { id: newId(), label: 'Nouvelle question', type: 'short_text' }]);
   }
+  function addSection() {
+    onChange([...value, { id: newId(), label: 'Nouvelle étape', type: 'section' }]);
+  }
   function patch(i: number, p: Partial<RsvpQuestion>) {
     onChange(value.map((q, idx) => (idx === i ? { ...q, ...p } : q)));
   }
@@ -75,6 +78,62 @@ export function QuestionBuilder({
           .slice(0, i)
           .filter((p) => p.type === 'single_choice' || p.type === 'multi_choice' || p.type === 'yes_no');
         const dep = priors.find((p) => p.id === q.showIf?.questionId);
+
+        // Séparateur d'étape : carte distincte (titre + sous-titre uniquement).
+        if (q.type === 'section') {
+          return (
+            <div key={q.id} className="rounded-xl border border-olive/25 bg-accent-soft/25 p-3">
+              <div className="flex items-start gap-2">
+                <div className="flex flex-col pt-1">
+                  <button
+                    type="button"
+                    onClick={() => move(i, -1)}
+                    disabled={i === 0}
+                    aria-label="Monter"
+                    className="text-[13px] leading-none text-sage disabled:opacity-30"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => move(i, 1)}
+                    disabled={i === value.length - 1}
+                    aria-label="Descendre"
+                    className="text-[13px] leading-none text-sage disabled:opacity-30"
+                  >
+                    ↓
+                  </button>
+                </div>
+                <div className="flex-1">
+                  <span className="mb-1 block font-body text-[10px] uppercase tracking-[0.16em] text-olive">
+                    — Nouvelle étape —
+                  </span>
+                  <input
+                    value={q.label}
+                    onChange={(e) => patch(i, { label: e.target.value })}
+                    placeholder="Titre de l'étape (ex. Le gîte)"
+                    className={`${FIELD} w-full`}
+                  />
+                  <input
+                    value={q.help ?? ''}
+                    onChange={(e) => patch(i, { help: e.target.value || undefined })}
+                    placeholder="Sous-titre (optionnel)"
+                    className={`${FIELD} mt-2 w-full`}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => remove(i)}
+                  aria-label="Supprimer l'étape"
+                  className="flex h-8 w-8 flex-none items-center justify-center rounded-full border border-line text-[15px] text-muted transition-colors hover:border-[#9a3b2e] hover:text-[#9a3b2e]"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          );
+        }
+
         return (
           <div key={q.id} className="rounded-xl border border-line bg-bg p-3.5">
             <div className="flex items-start gap-2">
@@ -233,13 +292,22 @@ export function QuestionBuilder({
           </div>
         );
       })}
-      <button
-        type="button"
-        onClick={add}
-        className="self-start rounded-[9px] border border-dashed border-line bg-transparent px-4 py-2.5 font-body text-[13px] uppercase tracking-[0.1em] text-olive transition-colors hover:bg-panel"
-      >
-        + Ajouter une question
-      </button>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={add}
+          className="rounded-[9px] border border-dashed border-line bg-transparent px-4 py-2.5 font-body text-[13px] uppercase tracking-[0.1em] text-olive transition-colors hover:bg-panel"
+        >
+          + Ajouter une question
+        </button>
+        <button
+          type="button"
+          onClick={addSection}
+          className="rounded-[9px] border border-dashed border-olive/40 bg-transparent px-4 py-2.5 font-body text-[13px] uppercase tracking-[0.1em] text-olive transition-colors hover:bg-accent-soft/40"
+        >
+          + Nouvelle étape
+        </button>
+      </div>
     </div>
   );
 }
