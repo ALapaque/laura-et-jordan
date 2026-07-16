@@ -9,15 +9,31 @@ export function ImageSlot({
   alt = '',
   label = 'Photo',
   className,
+  zoomable = false,
 }: {
   src?: string | null;
   alt?: string;
   label?: string;
   className?: string;
+  /** Rend l'image cliquable pour l'ouvrir en grand (voir `<Lightbox />`). */
+  zoomable?: boolean;
 }) {
   if (src) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={src} alt={alt} className={clsx('h-full w-full object-cover', className)} />;
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt={alt}
+        data-zoomable={zoomable ? '' : undefined}
+        role={zoomable ? 'button' : undefined}
+        tabIndex={zoomable ? 0 : undefined}
+        className={clsx(
+          'h-full w-full object-cover',
+          zoomable && 'cursor-zoom-in',
+          className,
+        )}
+      />
+    );
   }
   return (
     <div

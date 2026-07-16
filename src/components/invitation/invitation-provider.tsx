@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Lenis from 'lenis';
+import { Lightbox } from './lightbox';
 import { VideoIntro } from './video-intro';
 
 const INTRO_VIDEO_MP4 = process.env.NEXT_PUBLIC_INTRO_VIDEO || '/intro.mp4';
@@ -144,6 +145,9 @@ export function InvitationProvider({
           {atRsvp ? '↑ Haut' : 'Répondre'}
         </button>
       )}
+
+      {/* Zoom au clic sur toutes les photos du site (délégation). */}
+      <Lightbox />
     </>
   );
 }

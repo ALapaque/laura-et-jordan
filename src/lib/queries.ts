@@ -924,6 +924,95 @@ export async function deleteDetailCard(id: string): Promise<void> {
   done(await supa.from('detail_card').delete().eq('id', id));
 }
 
+// ── Galerie du couple ────────────────────────────────────────────
+/**
+ * Photos de l'album du couple (table `gallery_photo`, calquée sur `moment_media`
+ * mais rattachée au mariage). Résilient : table absente (script 06 non lancé) → `[]`.
+ * Réutilise la forme `MomentAsset` (`id` = ligne `gallery_photo`).
+ */
+export async function getGalleryPhotos(): Promise<MomentAsset[]> {
+  if (!supa) return demoStore().gallery.map((a) => ({ ...a })).sort(bySortOrder);
+  try {
+    type Emb = { url: string | null };
+    const res = await supa
+      .from('gallery_photo')
+      .select('id, sortOrder:sort_order, media(url)')
+      .order('sort_order', { ascending: true });
+    if (res.error) throw new Error(res.error.message);
+    const rows = (res.data ?? []) as unknown as Array<{
+      id: string;
+      sortOrder: number;
+      media: Emb | Emb[] | null;
+    }>;
+    const out: MomentAsset[] = [];
+    for (const r of rows) {
+      const url = firstOf(r.media)?.url;
+      if (url) out.push({ id: r.id, url, sortOrder: r.sortOrder });
+    }
+    return out;
+  } catch {
+    // Table `gallery_photo` absente → galerie vide (section masquée côté site).
+    return [];
+  }
+}
+
+export async function addGalleryPhoto(input: {
+  url: string;
+  storagePath: string;
+}): Promise<MomentAsset> {
+  if (!supa) {
+    const store = demoStore();
+    const asset: MomentAsset = {
+      id: nextDemoId('g'),
+      url: input.url,
+      sortOrder: store.gallery.length,
+    };
+    store.gallery.push(asset);
+    return asset;
+  }
+  const w = ok<Array<{ id: string }>>(await supa.from('wedding').select('id').limit(1))[0];
+  if (!w) throw new Error('Aucun mariage configuré');
+  const mediaId = await insertImageMedia(input.storagePath, input.url);
+  if (!mediaId) throw new Error('Média non créé');
+  const { count } = await supa
+    .from('gallery_photo')
+    .select('*', { count: 'exact', head: true })
+    .eq('wedding_id', w.id);
+  const row = ok<{ id: string; sortOrder: number }>(
+    await supa
+      .from('gallery_photo')
+      .insert({ wedding_id: w.id, media_id: mediaId, sort_order: count ?? 0 })
+      .select('id, sortOrder:sort_order')
+      .single(),
+  );
+  return { id: row.id, url: input.url, sortOrder: row.sortOrder };
+}
+
+export async function removeGalleryPhoto(id: string): Promise<void> {
+  if (!supa) {
+    const store = demoStore();
+    store.gallery = store.gallery.filter((a) => a.id !== id);
+    return;
+  }
+  done(await supa.from('gallery_photo').delete().eq('id', id));
+}
+
+export async function reorderGalleryPhotos(orderedIds: string[]): Promise<void> {
+  if (!supa) {
+    const store = demoStore();
+    const index = new Map(orderedIds.map((id, i) => [id, i]));
+    store.gallery.forEach((a) => {
+      if (index.has(a.id)) a.sortOrder = index.get(a.id)!;
+    });
+    store.gallery.sort(bySortOrder);
+    return;
+  }
+  const client = supa;
+  await Promise.all(
+    orderedIds.map((id, i) => client.from('gallery_photo').update({ sort_order: i }).eq('id', id)),
+  );
+}
+
 // ── Comparateurs ─────────────────────────────────────────────────
 function bySortOrder(a: { sortOrder: number }, b: { sortOrder: number }) {
   return a.sortOrder - b.sortOrder;
