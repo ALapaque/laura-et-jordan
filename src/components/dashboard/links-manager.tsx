@@ -43,9 +43,11 @@ export function LinksManager({
         <p className="m-0 font-body text-[15px] italic text-muted">
           Chaque invité reçoit un lien qui n'affiche que ses moments et son formulaire.
         </p>
+        {/* text-panel! : la règle globale `a { color: olive }` (non layerisée) bat sinon
+            l'utilitaire de couleur → texte olive sur fond olive = invisible. */}
         <Link
           href="/dashboard/links/new"
-          className="rounded-[9px] border-none bg-olive px-5 py-2.5 font-body text-[13px] uppercase tracking-[0.12em] text-panel transition-colors hover:bg-ink"
+          className="rounded-[9px] border-none bg-olive px-5 py-2.5 font-body text-[13px] uppercase tracking-[0.12em] text-panel! transition-colors hover:bg-ink"
         >
           + Nouveau parcours
         </Link>
