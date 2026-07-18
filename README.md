@@ -15,7 +15,7 @@ lien opaque qui n'affiche que les moments qui le concernent.
   dans le DOM pendant l'intro. Respecte `prefers-reduced-motion` et se souvient de l'intro déjà vue.
 - **RSVP multi-étapes** — présence → nom(s) & nombre → moments → régime → petit mot, piloté par la
   config du parcours. Validation Zod partagée client + serveur. Notification email aux mariés
-  (Resend). Re-soumission possible (upsert par parcours + nom).
+  (SendGrid). Re-soumission possible (upsert par parcours + nom).
 - **Tableau de bord** — vue d'ensemble (KPIs + graphiques), liens & parcours (création + copie de
   lien), suivi RSVP (filtres, recherche, détail, export CSV), éditeur de contenu avec aperçu live,
   moments réordonnables (dnd-kit), paramètres.
@@ -32,7 +32,7 @@ lien opaque qui n'affiche que les moments qui le concernent.
 | Style | Tailwind CSS v4 + variables CSS (design tokens) |
 | Polices | `next/font` (auto-hébergées) |
 | Motion | GSAP + Lenis |
-| Email | Resend |
+| Email | SendGrid (API, Single Sender) |
 | OG images | `next/og` (dynamique par parcours) |
 | Validation | Zod (schémas partagés) |
 | Déploiement | Docker (`output: 'standalone'`) + Coolify |
@@ -70,10 +70,10 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=        # serveur uniquement
 DATABASE_URL=                     # connection string du pooler Supabase
 
-# Email (resend.com)
-RESEND_API_KEY=
-RESEND_FROM="Laura & Jordan <faire-part@mariage.example.be>"
-NOTIFY_EMAILS=laura@…,jordan@…    # repli si la table wedding n'en définit pas
+# Email (sendgrid.com — « Single Sender » vérifié, aucun domaine requis)
+SENDGRID_API_KEY=
+SENDGRID_FROM="Laura & Jordan <lauraetjordan@exemple.be>"   # = l'adresse Single Sender vérifiée
+# Destinataires : définis dans le dashboard → Paramètres (table wedding.notify_emails)
 
 # App
 NEXT_PUBLIC_SITE_URL=https://mariage.example.be

@@ -44,7 +44,7 @@ SUPABASE_SERVICE_ROLE_KEY=eyJ...            # secret
 DATABASE_URL=postgresql://postgres.[REF]:[MOT_DE_PASSE]@aws-0-[REGION].pooler.supabase.com:6543/postgres
 NEXT_PUBLIC_SITE_URL=https://ton-domaine
 IP_HASH_SALT=...                            # une longue chaîne aléatoire
-# Emails (optionnel) : RESEND_API_KEY, RESEND_FROM, NOTIFY_EMAILS
+# Emails (optionnel) : SENDGRID_API_KEY, SENDGRID_FROM (Single Sender vérifié)
 ```
 
 Dès que ces variables sont présentes, le site quitte le mode démo : il lit/écrit dans ta base
