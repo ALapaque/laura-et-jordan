@@ -1,10 +1,11 @@
 import 'server-only';
-import { Resend } from 'resend';
-import { ATTENDING_LABELS } from './rsvp-schema';
 import type { Moment, Parcours, RsvpResponse, Wedding } from './types';
 
-const apiKey = process.env.RESEND_API_KEY;
-const from = process.env.RESEND_FROM ?? 'Laura & Jordan <onboarding@resend.dev>';
+// Envoi via l'API SendGrid (aucune dépendance : simple appel HTTPS).
+// `SENDGRID_FROM` = l'adresse « Single Sender » vérifiée dans SendGrid,
+// au format « Nom <email> » ou simplement « email ».
+const apiKey = process.env.SENDGRID_API_KEY;
+const sender = parseSender(process.env.SENDGRID_FROM ?? '');
 
 interface RsvpEmailData {
   wedding: Wedding;
@@ -19,7 +20,7 @@ export interface SendResult {
 }
 
 /**
- * Envoie la notification RSVP aux mariés via Resend (spec §4.3).
+ * Envoie la notification RSVP aux mariés via SendGrid (spec §4.3).
  * Dégradation gracieuse : sans clé API ou sans destinataire, on logge et on
  * n'échoue pas la requête RSVP.
  */
@@ -31,25 +32,42 @@ export async function sendRsvpNotification(data: RsvpEmailData): Promise<SendRes
   const subject = rsvpSubject(data.response);
   const html = renderRsvpEmail(data);
 
-  if (!apiKey) {
+  if (!apiKey || !sender.email) {
     console.info(
-      `[email:démo] ${subject} → ${recipients.join(', ')} (définissez RESEND_API_KEY pour l'envoi réel)`,
+      `[email:démo] ${subject} → ${recipients.join(', ')} (définissez SENDGRID_API_KEY et SENDGRID_FROM pour l'envoi réel)`,
     );
-    return { sent: false, reason: 'RESEND_API_KEY absente (mode démo)' };
+    return { sent: false, reason: 'SENDGRID_API_KEY/SENDGRID_FROM absents (mode démo)' };
   }
 
   try {
-    const resend = new Resend(apiKey);
-    const { error } = await resend.emails.send({ from, to: recipients, subject, html });
-    if (error) {
-      console.error('[email] échec Resend :', error);
-      return { sent: false, reason: error.message };
-    }
-    return { sent: true };
+    const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        personalizations: [{ to: recipients.map((email) => ({ email })) }],
+        from: { email: sender.email, name: sender.name },
+        subject,
+        content: [{ type: 'text/html', value: html }],
+      }),
+    });
+    if (res.ok) return { sent: true }; // SendGrid renvoie 202 Accepted
+    const detail = await res.text().catch(() => '');
+    console.error('[email] échec SendGrid :', res.status, detail);
+    return { sent: false, reason: `SendGrid a répondu ${res.status}` };
   } catch (err) {
     console.error('[email] exception :', err);
     return { sent: false, reason: err instanceof Error ? err.message : 'erreur inconnue' };
   }
+}
+
+// « Nom <email> » ou « email » → expéditeur SendGrid (doit être un Single Sender vérifié).
+function parseSender(raw: string): { email: string; name: string } {
+  const m = /^\s*(.*?)\s*<\s*([^>]+)\s*>\s*$/.exec(raw);
+  if (m && m[2]) return { name: m[1]?.trim() || 'Laura & Jordan', email: m[2].trim() };
+  return { name: 'Laura & Jordan', email: raw.trim() };
 }
 
 function rsvpSubject(r: RsvpResponse): string {
