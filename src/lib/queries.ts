@@ -722,8 +722,7 @@ export async function updateWeddingContent(input: {
   if (!w) return;
   const set: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (input.coupleNames !== undefined) set.couple_names = input.coupleNames;
-  if (input.eventDate !== undefined)
-    set.event_date = input.eventDate ? new Date(input.eventDate).toISOString() : null;
+  if (input.eventDate !== undefined) set.event_date = input.eventDate || null;
   if (input.venue !== undefined) set.venue = input.venue;
   if (input.welcomeText !== undefined) set.welcome_text = input.welcomeText;
   done(await supa.from('wedding').update(set).eq('id', w.id));
@@ -751,7 +750,10 @@ export async function updateSettings(input: {
   if (input.notifyEmails !== undefined) set.notify_emails = input.notifyEmails;
   if (input.notifyEnabled !== undefined) set.notify_enabled = input.notifyEnabled;
   if (input.rsvpDeadline !== undefined)
-    set.rsvp_deadline = input.rsvpDeadline ? new Date(input.rsvpDeadline).toISOString() : null;
+    // Envoyé tel quel (« YYYY-MM-DD », granularité jour) : robuste que la colonne
+    // soit `date` ou `timestamptz`. Une conversion en ISO complète (…T00:00:00Z)
+    // est rejetée par une colonne de type `date` → « invalid input syntax ».
+    set.rsvp_deadline = input.rsvpDeadline || null;
   if (input.locales !== undefined) set.locales = input.locales;
   if (input.siteDomain !== undefined) set.site_domain = input.siteDomain;
   done(await supa.from('wedding').update(set).eq('id', w.id));
