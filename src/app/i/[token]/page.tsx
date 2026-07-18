@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { Countdown } from '@/components/invitation/countdown';
 import { InvitationProvider } from '@/components/invitation/invitation-provider';
 import { RsvpForm } from '@/components/invitation/rsvp-form';
 import { ImageSlot } from '@/components/ui/image-slot';
@@ -53,6 +54,9 @@ export default async function InvitationPage({ params, searchParams }: PageProps
         <HeroSection wedding={wedding} countdown={countdown} />
 
         <div className="mx-auto max-w-[540px] pb-16">
+          {/* Compte à rebours jusqu'au grand jour, juste sous le hero */}
+          {wedding.eventDate && <Countdown date={wedding.eventDate} locale={locale} />}
+
           {/* Mot d'accueil */}
           <section data-rev="init" className="px-8 py-[70px] text-center">
             <span className="font-body text-[12px] uppercase tracking-[0.34em] text-sage">
