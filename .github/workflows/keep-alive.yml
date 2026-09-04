@@ -1,19 +1,20 @@
 name: Keep Supabase alive
 
 # Les projets Supabase gratuits sont mis en pause après 7 jours SANS activité
-# base de données. Ce workflow provoque chaque jour une vraie requête SQL.
+# base. Ce workflow appelle chaque jour `/api/health`, qui effectue une vraie
+# lecture Postgres → le projet reste actif.
 #
-# Pourquoi appeler le SITE plutôt que Supabase directement : l'ancienne version
-# pingait l'API Supabase avec des secrets `SUPABASE_URL` / `SUPABASE_ANON_KEY`
-# qui n'ont jamais été renseignés → le job sortait en `exit 0` avec un ✅ vert
-# sans rien pinger, et le projet a fini en pause quand même (sept. 2026).
-# Ici, aucun secret n'est requis : la page /i/<token> est en `force-dynamic` et
-# exécute `getInvitationByToken` AVANT de renvoyer 404 → Supabase est réellement
-# interrogé à chaque appel. Impossible de « réussir » sans rien faire.
+# Historique : la 1re version pingait l'API Supabase avec des secrets
+# `SUPABASE_URL` / `SUPABASE_ANON_KEY` jamais renseignés → le job sortait en
+# `exit 0` avec un ✅ vert sans rien pinger, et le projet a fini en pause quand
+# même (sept. 2026). Ici, aucun secret : impossible de « réussir » sans rien
+# faire, et un 503 (base KO) fait échouer le job au lieu de passer inaperçu.
 #
-# ⚠️ GitHub désactive les workflows planifiés après ~60 jours sans commit sur le
-# dépôt. Si tu reçois un mail « scheduled workflow disabled », réactive-le
-# depuis l'onglet Actions (un clic) — sinon la mise en pause peut revenir.
+# ⚠️ GitHub désactive les workflows planifiés après 60 jours SANS COMMIT sur un
+# dépôt public. Le projet étant figé jusqu'au mariage, ce workflow finira par
+# être désactivé : un pinger externe (cron-job.org) prend le relais sur la même
+# URL `/api/health`. Si un mail « scheduled workflow disabled » arrive, il
+# suffit de le réactiver en un clic depuis l'onglet Actions.
 #
 # URL personnalisable : Settings → Secrets and variables → Actions → Variables,
 # créer `SITE_URL` (ex. https://laura-et-jordan.com).
@@ -30,24 +31,22 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Réveiller la base via le site
+      - name: Réveiller la base via /api/health
         env:
           SITE_URL: ${{ vars.SITE_URL || 'https://laura-et-jordan.vercel.app' }}
         run: |
           set -euo pipefail
-          url="${SITE_URL%/}/i/keep-alive-ping"
-          code=$(curl -sS -o /dev/null -w '%{http_code}' -m 30 \
+          url="${SITE_URL%/}/api/health"
+          body=$(mktemp)
+          code=$(curl -sS -o "$body" -w '%{http_code}' -m 30 \
                    --retry 2 --retry-delay 5 "$url" || echo "000")
           echo "GET $url → HTTP $code"
-          case "$code" in
-            200|404)
-              # 404 = token inexistant, mais la requête Supabase a bien eu lieu.
-              echo "✅ Requête base exécutée — projet Supabase maintenu actif."
-              ;;
-            *)
-              echo "❌ Réponse inattendue ($code)."
-              echo "   Soit le site est indisponible, soit le projet Supabase est"
-              echo "   en pause → vérifier https://supabase.com/dashboard"
-              exit 1
-              ;;
-          esac
+          echo "Réponse : $(cat "$body")"
+          if [ "$code" = "200" ]; then
+            echo "✅ Lecture base OK — projet Supabase maintenu actif."
+            exit 0
+          fi
+          echo "❌ Réponse inattendue ($code)."
+          echo "   503 = la base ne répond pas (projet en pause ?)"
+          echo "   → vérifier https://supabase.com/dashboard"
+          exit 1
