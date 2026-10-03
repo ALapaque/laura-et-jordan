@@ -10,6 +10,7 @@ export function ImageSlot({
   label = 'Photo',
   className,
   zoomable = false,
+  fit = 'cover',
 }: {
   src?: string | null;
   alt?: string;
@@ -17,6 +18,12 @@ export function ImageSlot({
   className?: string;
   /** Rend l'image cliquable pour l'ouvrir en grand (voir `<Lightbox />`). */
   zoomable?: boolean;
+  /**
+   * `cover`   : l'image remplit son cadre et peut être rognée (vignettes, grilles).
+   * `natural` : l'image garde son ratio d'origine — **rien n'est rogné**, la
+   *             hauteur s'adapte à la largeur disponible.
+   */
+  fit?: 'cover' | 'natural';
 }) {
   if (src) {
     return (
@@ -28,7 +35,7 @@ export function ImageSlot({
         role={zoomable ? 'button' : undefined}
         tabIndex={zoomable ? 0 : undefined}
         className={clsx(
-          'h-full w-full object-cover',
+          fit === 'natural' ? 'block h-auto w-full' : 'h-full w-full object-cover',
           zoomable && 'cursor-zoom-in',
           className,
         )}

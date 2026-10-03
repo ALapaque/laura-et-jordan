@@ -234,24 +234,17 @@ function MomentGallery({ assets, title }: { assets: MomentAsset[]; title: string
   }
   if (assets.length === 1) {
     return (
-      <div className="mt-3 h-[150px] overflow-hidden rounded-[10px]">
-        <ImageSlot src={assets[0]!.url} alt={title} zoomable />
+      <div className="mt-3 overflow-hidden rounded-[10px]">
+        <ImageSlot src={assets[0]!.url} alt={title} zoomable fit="natural" />
       </div>
     );
   }
-  const odd = assets.length % 2 === 1;
-  const [first, ...rest] = assets;
-  const gridItems = odd ? rest : assets;
+  // Mosaïque en colonnes : chaque photo garde son ratio, sans trou ni rognage.
   return (
-    <div className="mt-3 grid grid-cols-2 gap-2">
-      {odd && first && (
-        <div className="col-span-2 h-[150px] overflow-hidden rounded-[10px]">
-          <ImageSlot src={first.url} alt={title} zoomable />
-        </div>
-      )}
-      {gridItems.map((a) => (
-        <div key={a.id} className="h-[110px] overflow-hidden rounded-[10px]">
-          <ImageSlot src={a.url} alt={title} zoomable />
+    <div className="mt-3 columns-2 gap-2">
+      {assets.map((a) => (
+        <div key={a.id} className="mb-2 break-inside-avoid overflow-hidden rounded-[10px]">
+          <ImageSlot src={a.url} alt={title} zoomable fit="natural" />
         </div>
       ))}
     </div>
@@ -271,8 +264,15 @@ function DetailsSection({ cards }: { cards: DetailCard[] }) {
       <div className="mx-auto mt-6 flex max-w-[420px] flex-col gap-4 text-left">
         {cards.map((c) => (
           <div key={c.id} className="overflow-hidden rounded-[13px] border border-line bg-surface">
-            <div className="h-[158px]">
-              <ImageSlot src={c.mediaUrl} label={c.label || 'Photo'} alt={c.label} zoomable />
+            {/* Sans image, on garde une hauteur pour le placeholder. */}
+            <div className={c.mediaUrl ? undefined : 'h-[158px]'}>
+              <ImageSlot
+                src={c.mediaUrl}
+                label={c.label || 'Photo'}
+                alt={c.label}
+                zoomable
+                fit="natural"
+              />
             </div>
             <div className="px-[18px] py-[15px]">
               <div className="mb-1 font-body text-[12px] uppercase tracking-[0.16em] text-olive">
@@ -290,23 +290,15 @@ function DetailsSection({ cards }: { cards: DetailCard[] }) {
 /** Galerie du couple — album libre (photos gérées au dashboard). Masquée si vide. */
 function GallerySection({ photos }: { photos: MomentAsset[] }) {
   if (photos.length === 0) return null;
-  const odd = photos.length % 2 === 1;
-  const [first, ...rest] = photos;
-  const gridItems = odd ? rest : photos;
   return (
     <section data-rev="init" className="px-5 pb-10 pt-14">
       <div className="mb-6 text-center">
         <span className="font-body text-[12px] uppercase tracking-[0.34em] text-sage">Galerie</span>
       </div>
-      <div className="mx-auto grid max-w-[440px] grid-cols-2 gap-2.5">
-        {odd && first && (
-          <div className="col-span-2 h-[180px] overflow-hidden rounded-[10px]">
-            <ImageSlot src={first.url} alt="Galerie" zoomable />
-          </div>
-        )}
-        {gridItems.map((a) => (
-          <div key={a.id} className="h-[150px] overflow-hidden rounded-[10px]">
-            <ImageSlot src={a.url} alt="Galerie" zoomable />
+      <div className="mx-auto max-w-[440px] columns-2 gap-2.5">
+        {photos.map((a) => (
+          <div key={a.id} className="mb-2.5 break-inside-avoid overflow-hidden rounded-[10px]">
+            <ImageSlot src={a.url} alt="Galerie" zoomable fit="natural" />
           </div>
         ))}
       </div>
