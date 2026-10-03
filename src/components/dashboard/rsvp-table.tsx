@@ -16,9 +16,11 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'no', label: 'Absents' },
 ];
 
+// « Peut-être » n'est plus proposé aux invités. Les entrées ci-dessous restent
+// tolérées pour d'éventuelles réponses enregistrées avant ce changement :
+// elles ne s'affichent que s'il en existe réellement.
 const ATTENDING_OPTS: { id: Attending; label: string }[] = [
   { id: 'yes', label: 'Oui' },
-  { id: 'maybe', label: 'Peut-être' },
   { id: 'no', label: 'Non' },
 ];
 
@@ -37,6 +39,15 @@ export function RsvpTable({
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Filtre « Peut-être » affiché uniquement s'il reste d'anciennes réponses.
+  const filters = useMemo(
+    () =>
+      items.some((r) => r.attending === 'maybe')
+        ? FILTERS
+        : FILTERS.filter((f) => f.id !== 'maybe'),
+    [items],
+  );
 
   const momentTitles = useMemo(
     () => Object.fromEntries(moments.map((m) => [m.id, m.title])),
@@ -79,7 +90,7 @@ export function RsvpTable({
     <div style={{ animation: 'jlFadeIn .3s ease' }}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          {FILTERS.map((f) => {
+          {filters.map((f) => {
             const on = filter === f.id;
             return (
               <button
@@ -242,6 +253,11 @@ function ResponseEditForm({
 }) {
   const [guestName, setGuestName] = useState(response.guestName);
   const [attending, setAttending] = useState<Attending>(response.attending);
+  // Idem : on ne réaffiche « Peut-être » que si la réponse éditée l'utilise déjà.
+  const attendingOpts =
+    attending === 'maybe'
+      ? [...ATTENDING_OPTS, { id: 'maybe' as Attending, label: 'Peut-être' }]
+      : ATTENDING_OPTS;
   const [headcount, setHeadcount] = useState(response.headcount);
   const [perMoment, setPerMoment] = useState<Record<string, boolean>>({ ...response.perMoment });
   const [dietary, setDietary] = useState(response.dietary ?? '');
@@ -284,7 +300,7 @@ function ResponseEditForm({
       <div className="grid gap-3.5 sm:grid-cols-2">
         <Field label="Présence">
           <div className="flex flex-wrap gap-2">
-            {ATTENDING_OPTS.map((o) => (
+            {attendingOpts.map((o) => (
               <button
                 key={o.id}
                 type="button"
