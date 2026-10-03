@@ -8,7 +8,7 @@ import { MotifBackground } from '@/components/ui/motif-background';
 import { ScallopedPanel } from '@/components/ui/scalloped-panel';
 import { withDbRetry } from '@/db';
 import { daysUntil, heroDate, momentLocation, momentTime } from '@/lib/format';
-import { getDetailCards, getGalleryPhotos, getInvitationByToken } from '@/lib/queries';
+import { getDetailCards, getInvitationByToken } from '@/lib/queries';
 import type { DetailCard, Moment, MomentAsset, Wedding } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -38,8 +38,8 @@ export default async function InvitationPage({ params, searchParams }: PageProps
   const preview = sp.preview === '1';
   const locale = sp.lang === 'nl' ? 'nl' : 'fr';
 
-  const [invitation, detailCards, galleryPhotos] = await withDbRetry(() =>
-    Promise.all([getInvitationByToken(token), getDetailCards(), getGalleryPhotos()]),
+  const [invitation, detailCards] = await withDbRetry(() =>
+    Promise.all([getInvitationByToken(token), getDetailCards()]),
   );
   if (!invitation) notFound();
 
@@ -70,7 +70,6 @@ export default async function InvitationPage({ params, searchParams }: PageProps
 
           <ProgrammeSection moments={moments} />
           <DetailsSection cards={detailCards} />
-          <GallerySection photos={galleryPhotos} />
 
           {/* RSVP — carte crème simple */}
           <section
@@ -287,21 +286,3 @@ function DetailsSection({ cards }: { cards: DetailCard[] }) {
   );
 }
 
-/** Galerie du couple — album libre (photos gérées au dashboard). Masquée si vide. */
-function GallerySection({ photos }: { photos: MomentAsset[] }) {
-  if (photos.length === 0) return null;
-  return (
-    <section data-rev="init" className="px-5 pb-10 pt-14">
-      <div className="mb-6 text-center">
-        <span className="font-body text-[12px] uppercase tracking-[0.34em] text-sage">Galerie</span>
-      </div>
-      <div className="mx-auto max-w-[440px] columns-2 gap-2.5">
-        {photos.map((a) => (
-          <div key={a.id} className="mb-2.5 break-inside-avoid overflow-hidden rounded-[10px]">
-            <ImageSlot src={a.url} alt="Galerie" zoomable fit="natural" />
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}

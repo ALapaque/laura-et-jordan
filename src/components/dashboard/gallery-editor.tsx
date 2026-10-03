@@ -54,7 +54,7 @@ export function GalleryEditor({ initial }: { initial: MomentAsset[] }) {
     <div style={{ animation: 'jlFadeIn .3s ease' }}>
       <div className="mb-4 flex items-center justify-between gap-3">
         <p className="m-0 font-body text-[15px] italic text-muted">
-          Ces photos composent la galerie affichée sur l'invitation. Réordonnez avec ‹ ›.
+          Album du couple, conservé ici. La galerie n'est pas affichée sur l'invitation. Réordonnez avec ‹ ›.
         </p>
         <button
           onClick={() => fileRef.current?.click()}
