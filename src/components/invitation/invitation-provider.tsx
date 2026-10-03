@@ -3,12 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Lenis from 'lenis';
 import { Lightbox } from './lightbox';
-import { VideoIntro } from './video-intro';
+import { EnvelopeIntro } from './envelope-intro';
 
-const INTRO_VIDEO_MP4 = process.env.NEXT_PUBLIC_INTRO_VIDEO || '/intro.mp4';
-const INTRO_VIDEO_WEBM = process.env.NEXT_PUBLIC_INTRO_VIDEO_WEBM || '/intro.webm';
-// 1re image de la vidéo (enveloppe + sceau) affichée avant le clic.
-const INTRO_POSTER = process.env.NEXT_PUBLIC_INTRO_POSTER || '/intro-poster.jpg';
 
 export function InvitationProvider({
   children,
@@ -124,12 +120,7 @@ export function InvitationProvider({
   return (
     <>
       {mounted && stage !== 'done' && (
-        <VideoIntro
-          webmSrc={INTRO_VIDEO_WEBM}
-          mp4Src={INTRO_VIDEO_MP4}
-          posterSrc={INTRO_POSTER}
-          onDone={onIntroDone}
-        />
+        <EnvelopeIntro onDone={onIntroDone} />
       )}
 
       {children}

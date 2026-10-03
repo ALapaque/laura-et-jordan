@@ -173,24 +173,121 @@ a:hover {
   }
 }
 
-/* ── Intro vidéo ───────────────────────────────────────────────
-   Masque les contrôles natifs de la balise <video> — en particulier
-   le gros bouton « play » glossy qu'iOS Safari dessine tout seul par
-   dessus une vidéo pas encore lancée (peu élégant). On gère le
-   lancement avec notre propre overlay + affiche la 1re frame via `poster`.
+/* ── Intro « ouverture d'enveloppe » ───────────────────────────
+   Entièrement dessinée : aucun média à télécharger, et chaque couleur
+   vient des jetons du site. Empilement : carton (1) < corps (2) <
+   rabat (3) < sceau (4). Le carton est DERRIÈRE le corps, il émerge
+   donc par le haut quand il monte.
    ───────────────────────────────────────────────────────────── */
-.jl-intro-video::-webkit-media-controls,
-.jl-intro-video::-webkit-media-controls-enclosure,
-.jl-intro-video::-webkit-media-controls-panel,
-.jl-intro-video::-webkit-media-controls-start-playback-button,
-.jl-intro-video::-webkit-media-controls-play-button,
-.jl-intro-video::-webkit-media-controls-overlay-play-button {
-  display: none !important;
-  -webkit-appearance: none;
-  appearance: none;
-  opacity: 0 !important;
-}
-.jl-intro-video {
+.jl-env {
   -webkit-tap-highlight-color: transparent;
-  object-fit: cover;
+  transition: opacity 0.7s ease;
+}
+.jl-env[data-stage='leaving'] {
+  opacity: 0;
+}
+.jl-env-shell {
+  width: min(78vw, 338px);
+  aspect-ratio: 1.45 / 1;
+  perspective: 1100px;
+  filter: drop-shadow(0 20px 38px rgba(64, 57, 42, 0.22));
+}
+.jl-env-body {
+  z-index: 2;
+  background-image: linear-gradient(170deg, rgba(255, 255, 255, 0.55), rgba(64, 57, 42, 0.05));
+  box-shadow: inset 0 2px 5px rgba(255, 255, 255, 0.6);
+}
+.jl-env-card {
+  z-index: 1;
+  height: 80%;
+  box-shadow: 0 8px 20px rgba(64, 57, 42, 0.16);
+}
+.jl-env-flap {
+  z-index: 3;
+  height: 46%;
+  transform-origin: 50% 0%;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  border-radius: 10px 10px 0 0;
+  background-image: linear-gradient(185deg, rgba(255, 255, 255, 0.5), rgba(64, 57, 42, 0.07));
+  filter: drop-shadow(0 2px 2px rgba(64, 57, 42, 0.12));
+}
+.jl-env-seal {
+  z-index: 4;
+  top: 46%;
+  left: 50%;
+  width: 46px;
+  height: 46px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle at 34% 30%, #e8c86a 0%, #d2ae47 54%, #ab8a2f 100%);
+  box-shadow:
+    0 2px 7px rgba(64, 57, 42, 0.3),
+    inset 0 -1px 3px rgba(107, 84, 18, 0.4);
+}
+
+/* Respiration discrète au repos : invite à cliquer. */
+.jl-env[data-stage='idle'] .jl-env-shell {
+  animation: jlBreathe 4.6s ease-in-out infinite;
+}
+
+/* Chorégraphie : sceau → rabat → carton. */
+.jl-env[data-stage='opening'] .jl-env-seal {
+  animation: jlSealBreak 0.75s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.jl-env[data-stage='opening'] .jl-env-flap {
+  animation: jlFlapOpen 1s cubic-bezier(0.45, 0.05, 0.25, 1) 0.35s forwards;
+}
+.jl-env[data-stage='opening'] .jl-env-card {
+  animation: jlCardRise 1.5s cubic-bezier(0.25, 0.8, 0.3, 1) 1s forwards;
+}
+.jl-env[data-stage='opening'] .jl-env-cta,
+.jl-env[data-stage='leaving'] .jl-env-cta {
+  animation: jlFadeOutDown 0.45s ease forwards;
+}
+
+@keyframes jlSealBreak {
+  0% {
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  34% {
+    transform: translate(-50%, -50%) scale(1.15) rotate(-3deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -54%) scale(0.32) rotate(-20deg);
+    opacity: 0;
+  }
+}
+@keyframes jlFlapOpen {
+  0% {
+    transform: rotateX(0deg);
+    z-index: 3;
+  }
+  49% {
+    z-index: 3;
+  }
+  50% {
+    z-index: 0;
+  }
+  100% {
+    transform: rotateX(-177deg);
+    z-index: 0;
+  }
+}
+@keyframes jlCardRise {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  60% {
+    transform: translateY(-80%) scale(1);
+  }
+  100% {
+    transform: translateY(-85%) scale(1.03);
+  }
+}
+@keyframes jlFadeOutDown {
+  to {
+    opacity: 0;
+    transform: translateY(10px);
+  }
 }
