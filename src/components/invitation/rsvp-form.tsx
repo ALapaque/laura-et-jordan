@@ -225,11 +225,17 @@ export function RsvpForm({
         outAnswers[q.id] = v;
       }
     }
+    // Le bouton « Continuer » est déjà bloqué tant qu'aucun choix n'est fait ;
+    // garde-fou explicite plutôt qu'une valeur par défaut invisible côté mariés.
+    if (!attending) {
+      setError('Merci d’indiquer si vous serez des nôtres.');
+      return;
+    }
     const payload = {
       token,
       guestName,
       email,
-      attending: attending ?? 'maybe',
+      attending,
       headcount: hasHeadcountQuestion ? headcount : 1,
       perMoment,
       answers: outAnswers,
@@ -265,8 +271,8 @@ export function RsvpForm({
     setStepIndex(0);
   }
 
-  if (submitted) {
-    return <Confirmation attending={attending ?? 'maybe'} deadline={deadline} onEdit={resetToEdit} />;
+  if (submitted && attending) {
+    return <Confirmation attending={attending} deadline={deadline} onEdit={resetToEdit} />;
   }
 
   const nextLabel = isLast ? 'Envoyer ma réponse' : 'Continuer';
@@ -305,9 +311,6 @@ export function RsvpForm({
             <div className="mx-auto flex max-w-[340px] flex-col gap-3">
               <ChoiceButton active={attending === 'yes'} onClick={() => chooseAttending('yes')}>
                 Oui, avec joie
-              </ChoiceButton>
-              <ChoiceButton active={attending === 'maybe'} onClick={() => chooseAttending('maybe')}>
-                Peut-être
               </ChoiceButton>
               <ChoiceButton active={attending === 'no'} onClick={() => chooseAttending('no')}>
                 Non, malheureusement
@@ -694,17 +697,11 @@ function Confirmation({
           title: 'Merci du retour',
           text: `Vous nous manquerez — merci de nous avoir prévenus. Vous pouvez modifier votre réponse ${until}.`,
         }
-      : attending === 'maybe'
-        ? {
-            icon: '✓',
-            title: 'Bien noté',
-            text: `Merci ! Tenez-nous au courant dès que possible. Réponse modifiable ${until}.`,
-          }
-        : {
-            icon: '✓',
-            title: 'Quelle joie !',
-            text: `Votre présence est enregistrée. Un récapitulatif a été envoyé aux mariés. Réponse modifiable ${until}.`,
-          };
+      : {
+          icon: '✓',
+          title: 'Quelle joie !',
+          text: `Votre présence est enregistrée. Un récapitulatif a été envoyé aux mariés. Réponse modifiable ${until}.`,
+        };
 
   return (
     <div className="py-2.5 text-center" style={{ animation: 'jlFadeUp .5s ease both' }}>

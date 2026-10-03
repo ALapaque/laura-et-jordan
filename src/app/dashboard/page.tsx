@@ -11,7 +11,8 @@ export default async function OverviewPage() {
   const kpis = [
     { label: 'Présents', value: stats.present, color: '#5C6441' },
     { label: 'Absents', value: stats.absent, color: '#78745A' },
-    { label: 'Peut-être', value: stats.maybe, color: '#946f12' },
+    // Compteur affiché uniquement s'il reste d'anciennes réponses « Peut-être ».
+    ...(stats.maybe > 0 ? [{ label: 'Peut-être', value: stats.maybe, color: '#946f12' }] : []),
     { label: 'Réponses', value: stats.total, color: '#40392A' },
   ];
 
