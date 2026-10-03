@@ -59,7 +59,7 @@ export function VideoIntro({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center overflow-hidden bg-ink"
+      className="fixed inset-0 z-[60] flex items-center justify-center overflow-hidden bg-bg"
       style={{ opacity: leaving ? 0 : 1, transition: 'opacity .7s ease' }}
       role="dialog"
       aria-label="Introduction"
@@ -94,23 +94,23 @@ export function VideoIntro({
             className="pointer-events-none absolute inset-0"
             style={{
               background:
-                'linear-gradient(to bottom, rgba(64,57,42,0.34) 0%, rgba(64,57,42,0.04) 24%, rgba(64,57,42,0.10) 46%, rgba(64,57,42,0.78) 90%, rgba(64,57,42,0.92) 100%)',
+                'linear-gradient(to bottom, rgba(242,237,224,0.30) 0%, rgba(242,237,224,0) 22%, rgba(242,237,224,0.12) 44%, rgba(242,237,224,0.86) 88%, rgba(242,237,224,0.96) 100%)',
             }}
           />
           <span
-            className="relative font-display leading-none text-panel"
-            style={{ fontSize: 'clamp(30px, 8vw, 48px)', textShadow: '0 2px 16px rgba(0,0,0,0.55)' }}
+            className="relative font-display leading-none text-ink"
+            style={{ fontSize: 'clamp(30px, 8vw, 48px)', textShadow: '0 1px 12px rgba(242,237,224,0.9)' }}
           >
             Laura <span className="font-accent text-[0.6em] text-gold">&amp;</span> Jordan
           </span>
-          <span className="relative flex h-16 w-16 items-center justify-center rounded-full border border-gold/80 bg-ink/25 backdrop-blur-sm transition group-hover:bg-ink/45 group-active:scale-95">
+          <span className="relative flex h-16 w-16 items-center justify-center rounded-full border border-gold/70 bg-surface/75 backdrop-blur-sm transition group-hover:bg-surface group-active:scale-95">
             <svg viewBox="0 0 24 24" aria-hidden className="ml-0.5 h-6 w-6 fill-gold">
               <path d="M8 5v14l11-7z" />
             </svg>
           </span>
           <span
-            className="relative font-body text-[12px] uppercase tracking-[0.26em] text-panel/90"
-            style={{ textShadow: '0 1px 10px rgba(0,0,0,0.6)' }}
+            className="relative font-body text-[12px] uppercase tracking-[0.26em] text-olive"
+            style={{ textShadow: '0 1px 10px rgba(242,237,224,0.9)' }}
           >
             Ouvrir l'invitation
           </span>
@@ -120,7 +120,7 @@ export function VideoIntro({
       {/* « Passer » — toujours disponible, pour ne jamais rester bloqué */}
       <button
         onClick={finish}
-        className="absolute right-5 top-5 z-[3] rounded-full border border-panel/40 bg-ink/45 px-5 py-2 font-body text-[12px] uppercase tracking-[0.14em] text-panel/90 backdrop-blur transition-colors hover:bg-ink/70"
+        className="absolute right-5 top-5 z-[3] rounded-full border border-line bg-surface/80 px-5 py-2 font-body text-[12px] uppercase tracking-[0.14em] text-olive backdrop-blur transition-colors hover:bg-surface"
       >
         Passer
       </button>
