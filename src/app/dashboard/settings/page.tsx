@@ -1,8 +1,10 @@
+import { requireAdmin } from '@/lib/auth';
 import { withDbRetry } from '@/db';
 import { SettingsForm } from '@/components/dashboard/settings-form';
 import { getWedding } from '@/lib/queries';
 
 export default async function SettingsPage() {
+  await requireAdmin();
   const wedding = await withDbRetry(() => getWedding());
   return (
     <SettingsForm

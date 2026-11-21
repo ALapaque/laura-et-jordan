@@ -27,6 +27,23 @@ Supabase → **Authentication → Users → Add user** : email + mot de passe du
 C'est le seul compte admin. Puis **Authentication → Sign In / Providers → Email** → décoche
 **Allow new users to sign up** (personne d'autre ne pourra s'inscrire).
 
+### Sécurité de l'accès (à vérifier, 2 minutes)
+
+- **Inscriptions désactivées** (ci-dessus) : sans cela, n'importe qui peut se créer un
+  compte Supabase avec la clé publique du site et entrer dans le dashboard.
+- Dans le même écran, laisse **Allow anonymous sign-ins** désactivé.
+- **Recommandé** : ajoute la variable `ADMIN_EMAILS` (email du compte des mariés) dans
+  Vercel. Le dashboard n'accepte alors que ces comptes, même si un autre compte existait.
+- Vérifie que la RLS protège bien les données (remplace les deux valeurs) :
+
+  ```bash
+  curl "https://xxxx.supabase.co/rest/v1/rsvp_response?select=*" -H "apikey: <clé anon>"
+  ```
+
+  Réponse attendue : `[]`. Si des réponses d'invités s'affichent, relance `01_schema.sql`.
+- Si tu as lancé `02_seed.sql` : ses 3 liens de démo ont des tokens **publics** (ils sont
+  dans ce dépôt). Supprime ces 3 parcours depuis Dashboard → Liens avant d'inviter.
+
 ## 3. Storage
 
 Le bucket public **`media`** est créé par `01_schema.sql` (motif, musique, photos).
@@ -44,6 +61,7 @@ SUPABASE_SERVICE_ROLE_KEY=eyJ...            # secret
 DATABASE_URL=postgresql://postgres.[REF]:[MOT_DE_PASSE]@aws-0-[REGION].pooler.supabase.com:6543/postgres
 NEXT_PUBLIC_SITE_URL=https://ton-domaine
 IP_HASH_SALT=...                            # une longue chaîne aléatoire
+ADMIN_EMAILS=laura@exemple.be               # recommandé : compte(s) autorisé(s) au dashboard
 # Emails (optionnel) : SENDGRID_API_KEY, SENDGRID_FROM (Single Sender vérifié)
 ```
 

@@ -1,3 +1,4 @@
+import { requireAdmin } from '@/lib/auth';
 import { notFound } from 'next/navigation';
 import { withDbRetry } from '@/db';
 import { ParcoursEditor } from '@/components/dashboard/parcours-editor';
@@ -6,6 +7,7 @@ import { getMoments, getParcoursList } from '@/lib/queries';
 export const dynamic = 'force-dynamic';
 
 export default async function EditParcoursPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireAdmin();
   const { id } = await params;
   const [parcoursList, moments] = await withDbRetry(() =>
     Promise.all([getParcoursList(), getMoments()]),

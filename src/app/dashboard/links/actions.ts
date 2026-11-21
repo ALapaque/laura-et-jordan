@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { requireAdmin } from '@/lib/auth';
 import { createParcours, deleteParcours, updateParcours } from '@/lib/queries';
 import type { RsvpQuestion } from '@/lib/types';
 
@@ -14,6 +15,7 @@ export async function createParcoursAction(input: {
   momentIds: string[];
   formQuestions?: RsvpQuestion[];
 }) {
+  await requireAdmin();
   const name = input.name.trim() || 'Nouveau parcours';
   const parcours = await createParcours({
     name,
@@ -28,6 +30,7 @@ export async function updateParcoursAction(
   id: string,
   input: { name?: string; momentIds?: string[]; formQuestions?: RsvpQuestion[] },
 ) {
+  await requireAdmin();
   await updateParcours(id, {
     name: input.name?.trim() || undefined,
     visibleMomentIds: input.momentIds,
@@ -37,6 +40,7 @@ export async function updateParcoursAction(
 }
 
 export async function deleteParcoursAction(id: string) {
+  await requireAdmin();
   await deleteParcours(id);
   revalidateAll();
 }

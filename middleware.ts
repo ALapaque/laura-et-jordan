@@ -1,16 +1,20 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { isSupabaseConfigured } from '@/lib/supabase/config';
+import { hasRealData, isAllowedAdmin, isSupabaseConfigured } from '@/lib/supabase/config';
 import { updateSession } from '@/lib/supabase/middleware';
 
 /**
  * Rafraîchit la session Supabase et protège `/dashboard/**`.
- * En mode démo (Supabase non configuré), le dashboard reste accessible.
+ * En mode démo (aucune vraie donnée), le dashboard reste accessible.
+ * Défense en profondeur seulement : chaque Server Action / page vérifie aussi
+ * l'accès elle-même (`requireAdmin`).
  */
 export async function middleware(request: NextRequest) {
-  const { response, user } = await updateSession(request);
+  const { response, user: sessionUser } = await updateSession(request);
+  const user = sessionUser && isAllowedAdmin(sessionUser.email) ? sessionUser : null;
   const { pathname } = request.nextUrl;
+  const authRequired = isSupabaseConfigured || hasRealData;
 
-  if (pathname.startsWith('/dashboard') && isSupabaseConfigured && !user) {
+  if (pathname.startsWith('/dashboard') && authRequired && !user) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('redirect', pathname);
@@ -28,7 +32,10 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Tout sauf les assets statiques et médias.
+    // Le dashboard est TOUJOURS couvert, quelle que soit la forme de l'URL :
+    // l'exclusion par extension ci-dessous laissait passer `/dashboard/links/x.png`.
+    '/dashboard/:path*',
+    // Tout le reste sauf les assets statiques et médias.
     '/((?!_next/static|_next/image|favicon.svg|.*\\.(?:svg|png|jpg|jpeg|gif|webp|webm|mp4|ico|woff2?)$).*)',
   ],
 };

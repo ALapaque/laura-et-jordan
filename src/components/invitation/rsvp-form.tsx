@@ -497,6 +497,7 @@ function renderQuestion(
         <textarea
           value={str}
           onChange={(e) => ctx.onAnswer(e.target.value)}
+          maxLength={2000}
           rows={4}
           placeholder="Votre réponse…"
           className={`${INPUT_CLASS} resize-none`}
@@ -591,6 +592,7 @@ function renderQuestion(
         <input
           value={str}
           onChange={(e) => ctx.onAnswer(e.target.value)}
+          maxLength={2000}
           placeholder="Votre réponse…"
           className={INPUT_CLASS}
         />

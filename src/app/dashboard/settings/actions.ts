@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { requireAdmin } from '@/lib/auth';
 import { updateSettings } from '@/lib/queries';
 
 export async function updateSettingsAction(input: {
@@ -10,6 +11,7 @@ export async function updateSettingsAction(input: {
   locales: string[];
   siteDomain: string | null;
 }) {
+  await requireAdmin();
   await updateSettings({
     notifyEmails: input.notifyEmails.map((e) => e.trim()).filter(Boolean),
     notifyEnabled: input.notifyEnabled,
