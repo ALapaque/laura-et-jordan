@@ -16,8 +16,18 @@ export const rsvpInputSchema = z
     email: z.string().trim().min(1, 'Merci d’indiquer votre email.').email('Email invalide.').max(200),
     attending: attendingSchema,
     headcount: z.number().int().min(0).max(20).default(1),
-    perMoment: z.record(z.string(), z.boolean()).default({}),
-    answers: z.record(z.string(), z.union([z.string(), z.array(z.string())])).default({}),
+    // Tailles bornées : sans limite, n'importe qui pouvait enregistrer des Mo de texte.
+    perMoment: z
+      .record(z.string().max(64), z.boolean())
+      .refine((r) => Object.keys(r).length <= 100, 'Trop de moments.')
+      .default({}),
+    answers: z
+      .record(
+        z.string().max(64),
+        z.union([z.string().max(2000), z.array(z.string().max(500)).max(50)]),
+      )
+      .refine((r) => Object.keys(r).length <= 100, 'Trop de réponses.')
+      .default({}),
     dietary: z.string().max(500).default(''),
     message: z.string().max(2000).default(''),
     locale: z.enum(['fr', 'nl']).default('fr'),

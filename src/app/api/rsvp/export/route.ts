@@ -61,6 +61,7 @@ export async function GET() {
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
       'Content-Disposition': `attachment; filename="rsvp-laura-jordan.csv"`,
+      'Cache-Control': 'no-store',
     },
   });
 }
@@ -82,8 +83,14 @@ function formatAnswer(q: RsvpQuestion | undefined, value: RsvpAnswerValue): stri
   return value;
 }
 
+/**
+ * Cellule CSV sûre. Les valeurs viennent des invités : une cellule commençant par
+ * `= + - @` (ou tabulation / retour chariot) serait interprétée comme une FORMULE
+ * par Excel / Sheets à l'ouverture de l'export. On la neutralise avec une apostrophe.
+ */
 function csvCell(value: string): string {
-  const needsQuote = /[",\r\n]/.test(value);
-  const escaped = value.replace(/"/g, '""');
+  const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  const needsQuote = /[",\r\n]/.test(safe);
+  const escaped = safe.replace(/"/g, '""');
   return needsQuote ? `"${escaped}"` : escaped;
 }

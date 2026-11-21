@@ -1,9 +1,11 @@
+import { requireAdmin } from '@/lib/auth';
 import { withDbRetry } from '@/db';
 import { ContentEditor } from '@/components/dashboard/content-editor';
 import { DetailCardsManager } from '@/components/dashboard/detail-cards-manager';
 import { getDetailCards, getWedding } from '@/lib/queries';
 
 export default async function ContentPage() {
+  await requireAdmin();
   const [wedding, detailCards] = await withDbRetry(() =>
     Promise.all([getWedding(), getDetailCards()]),
   );

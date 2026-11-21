@@ -1,7 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { isSupabaseConfigured } from '@/lib/supabase/config';
+import { isAllowedAdmin, isSupabaseConfigured } from '@/lib/supabase/config';
 import { createClient } from '@/lib/supabase/server';
 
 export interface LoginState {
@@ -16,8 +16,13 @@ export async function signIn(_prev: LoginState | null, formData: FormData): Prom
   if (!email || !password) return { error: 'Renseignez votre email et votre mot de passe.' };
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: 'Identifiants invalides.' };
+  if (!isAllowedAdmin(data.user?.email)) {
+    // Compte Supabase valide mais non autorisé : on ferme la session, même message.
+    await supabase.auth.signOut();
+    return { error: 'Identifiants invalides.' };
+  }
 
   redirect('/dashboard');
 }

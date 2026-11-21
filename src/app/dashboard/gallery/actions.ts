@@ -1,10 +1,11 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { requireAdmin } from '@/lib/auth';
 import { addGalleryPhoto, removeGalleryPhoto, reorderGalleryPhotos } from '@/lib/queries';
 import { isStorageConfigured, uploadMedia } from '@/lib/storage';
 import type { MomentAsset } from '@/lib/types';
-import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from '@/lib/upload';
+import { imageExtension, MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from '@/lib/upload';
 
 function revalidateAll() {
   revalidatePath('/dashboard/gallery');
@@ -15,15 +16,15 @@ function revalidateAll() {
 export async function addGalleryPhotoAction(
   formData: FormData,
 ): Promise<{ asset?: MomentAsset; error?: string }> {
+  await requireAdmin();
   const file = formData.get('file');
   if (!(file instanceof File) || file.size === 0) return { error: 'Aucun fichier sélectionné.' };
-  if (!file.type.startsWith('image/'))
-    return { error: 'Le fichier doit être une image (jpg, png, webp…).' };
+  const ext = imageExtension(file.type);
+  if (!ext) return { error: 'Le fichier doit être une image JPG, PNG ou WebP.' };
   if (file.size > MAX_UPLOAD_BYTES) return { error: `Image trop lourde (max ${MAX_UPLOAD_LABEL}).` };
   if (!isStorageConfigured()) {
     return { error: 'Storage Supabase non configuré — créez le bucket public « media ».' };
   }
-  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
   const result = await uploadMedia(
     `gallery/${crypto.randomUUID()}.${ext}`,
     await file.arrayBuffer(),
@@ -40,11 +41,13 @@ export async function addGalleryPhotoAction(
 }
 
 export async function removeGalleryPhotoAction(id: string) {
+  await requireAdmin();
   await removeGalleryPhoto(id);
   revalidateAll();
 }
 
 export async function reorderGalleryPhotosAction(orderedIds: string[]) {
+  await requireAdmin();
   await reorderGalleryPhotos(orderedIds);
   revalidateAll();
 }

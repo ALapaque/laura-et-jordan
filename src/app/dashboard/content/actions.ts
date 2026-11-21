@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { requireAdmin } from '@/lib/auth';
 import {
   createDetailCard,
   deleteDetailCard,
@@ -10,7 +11,7 @@ import {
 } from '@/lib/queries';
 import { isStorageConfigured, uploadMedia } from '@/lib/storage';
 import type { DetailCard } from '@/lib/types';
-import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from '@/lib/upload';
+import { imageExtension, MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from '@/lib/upload';
 
 export async function updateContentAction(input: {
   coupleNames: string;
@@ -18,6 +19,7 @@ export async function updateContentAction(input: {
   venue: string | null;
   welcomeText: string;
 }) {
+  await requireAdmin();
   await updateWeddingContent({
     coupleNames: input.coupleNames.trim() || 'Laura & Jordan',
     eventDate: input.eventDate || null,
@@ -31,6 +33,7 @@ export async function updateContentAction(input: {
 
 // ── Cartes « détails pratiques » ─────────────────────────────────
 export async function createDetailCardAction(): Promise<DetailCard> {
+  await requireAdmin();
   const card = await createDetailCard({ label: 'Nouvelle carte', value: '' });
   revalidatePath('/dashboard/content');
   return card;
@@ -40,11 +43,13 @@ export async function updateDetailCardAction(
   id: string,
   input: { label?: string; value?: string },
 ) {
+  await requireAdmin();
   await updateDetailCard(id, input);
   revalidatePath('/dashboard/content');
 }
 
 export async function deleteDetailCardAction(id: string) {
+  await requireAdmin();
   await deleteDetailCard(id);
   revalidatePath('/dashboard/content');
 }
@@ -54,15 +59,15 @@ export async function uploadDetailCardImageAction(
   id: string,
   formData: FormData,
 ): Promise<{ url?: string; error?: string }> {
+  await requireAdmin();
   const file = formData.get('file');
   if (!(file instanceof File) || file.size === 0) return { error: 'Aucun fichier sélectionné.' };
-  if (!file.type.startsWith('image/'))
-    return { error: 'Le fichier doit être une image (jpg, png, webp…).' };
+  const ext = imageExtension(file.type);
+  if (!ext) return { error: 'Le fichier doit être une image JPG, PNG ou WebP.' };
   if (file.size > MAX_UPLOAD_BYTES) return { error: `Image trop lourde (max ${MAX_UPLOAD_LABEL}).` };
   if (!isStorageConfigured()) {
     return { error: 'Storage Supabase non configuré — créez le bucket public « media ».' };
   }
-  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
   const result = await uploadMedia(
     `details/${id}-${Date.now()}.${ext}`,
     await file.arrayBuffer(),
@@ -75,6 +80,7 @@ export async function uploadDetailCardImageAction(
 }
 
 export async function removeDetailCardImageAction(id: string) {
+  await requireAdmin();
   await setDetailCardImage(id, null);
   revalidatePath('/dashboard/content');
 }

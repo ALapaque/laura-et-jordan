@@ -1,8 +1,10 @@
+import { requireAdmin } from '@/lib/auth';
 import { withDbRetry } from '@/db';
 import { LinksManager } from '@/components/dashboard/links-manager';
 import { getMoments, getParcoursList, getResponses } from '@/lib/queries';
 
 export default async function LinksPage() {
+  await requireAdmin();
   const [parcours, moments, responses] = await withDbRetry(() =>
     Promise.all([getParcoursList(), getMoments(), getResponses()]),
   );
